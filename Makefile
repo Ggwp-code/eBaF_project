@@ -19,8 +19,10 @@ all: $(BUILD_DIR)/ebaf-crypto
 check:
 	./scripts/check_kernel_features.sh
 
-test: $(BUILD_DIR)/test_config
+test: $(BUILD_DIR)/test_config $(BUILD_DIR)/test_event_format $(BUILD_DIR)/test_stats_format
 	./$(BUILD_DIR)/test_config
+	./$(BUILD_DIR)/test_event_format
+	./$(BUILD_DIR)/test_stats_format
 
 integration-test: $(BUILD_DIR)/ebaf-crypto
 	@tests/integration/test_xdp_smoke.sh; status=$$?; \
@@ -62,6 +64,12 @@ $(BUILD_DIR)/ebaf-crypto: $(USER_OBJS)
 
 $(BUILD_DIR)/test_config: tests/unit/test_config.c src/user/config.c src/user/config.h include/crypto_common.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -Iinclude -Isrc/user tests/unit/test_config.c src/user/config.c -o $@
+
+$(BUILD_DIR)/test_event_format: tests/unit/test_event_format.c src/user/event_format.c src/user/event_format.h include/crypto_common.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -Iinclude -Isrc/user tests/unit/test_event_format.c src/user/event_format.c -o $@
+
+$(BUILD_DIR)/test_stats_format: tests/unit/test_stats_format.c src/user/stats_format.c src/user/stats_format.h include/crypto_common.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -Iinclude -Isrc/user tests/unit/test_stats_format.c src/user/stats_format.c -o $@
 
 clean:
 	rm -rf $(BUILD_DIR)
