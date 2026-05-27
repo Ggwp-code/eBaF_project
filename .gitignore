@@ -5,6 +5,7 @@ build/
 *.log
 *.out
 *.pcap
+*.pdf
 compile_commands.json
 .cache/
 .clangd/
