@@ -1,0 +1,54 @@
+:root {
+  color-scheme: dark;
+  --bg: #0b0f14;
+  --panel: #121922;
+  --panel-2: #172231;
+  --text: #d9e2ec;
+  --muted: #89a1b7;
+  --line: #263545;
+  --accent: #33d17a;
+  --warn: #ffcc66;
+  --bad: #ff6b6b;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); }
+header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 18px; border-bottom: 1px solid var(--line); background: #090d12;
+}
+h1 { margin: 0; font-size: 20px; }
+h2 { margin: 0 0 10px; font-size: 15px; color: #f5f7fa; }
+h3 { margin: 14px 0 6px; font-size: 12px; color: var(--muted); text-transform: uppercase; }
+p { margin: 4px 0 0; color: var(--muted); }
+button {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 8px 10px; cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+main { padding: 14px; display: grid; gap: 14px; }
+.metrics { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.metrics div { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+.metrics span { display: block; font: 700 24px ui-monospace, monospace; color: var(--accent); }
+.metrics label { display: block; color: var(--muted); font-size: 12px; text-transform: uppercase; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; }
+.grid { display: grid; grid-template-columns: 1.7fr 1fr; gap: 14px; }
+.chart-panel canvas { width: 100%; height: 220px; display: block; background: #0d141c; border-radius: 6px; }
+table { width: 100%; border-collapse: collapse; font: 12px ui-monospace, monospace; }
+th, td { border-bottom: 1px solid var(--line); padding: 6px; text-align: left; vertical-align: top; }
+th { color: var(--muted); font-weight: 600; }
+tr { cursor: pointer; }
+tr:hover { background: var(--panel-2); }
+pre {
+  min-height: 70px; margin: 0; padding: 10px; overflow: auto;
+  background: #0d141c; border: 1px solid var(--line); border-radius: 6px;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap; word-break: break-word;
+}
+.bad { color: var(--bad); }
+.warn { color: var(--warn); }
+@media (max-width: 900px) {
+  header, .grid { grid-template-columns: 1fr; display: grid; gap: 10px; }
+  .metrics { grid-template-columns: repeat(2, 1fr); }
+}

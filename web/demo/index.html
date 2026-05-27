@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>eBaF Live Cipher Dashboard</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header>
+    <div>
+      <h1>eBaF Live Cipher Dashboard</h1>
+      <p id="status">connecting...</p>
+    </div>
+    <div class="actions">
+      <button id="reset">Reset View</button>
+      <button id="stop">Stop Demo</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="metrics">
+      <div><span id="seen">0</span><label>seen</label></div>
+      <div><span id="ok">0</span><label>crypto ok</label></div>
+      <div><span id="fail">0</span><label>crypto fail</label></div>
+      <div><span id="pps">0</span><label>pps</label></div>
+      <div><span id="okr">0</span><label>ok/sec</label></div>
+    </section>
+
+    <section class="panel chart-panel">
+      <h2>Live Throughput</h2>
+      <canvas id="chart" width="1100" height="220"></canvas>
+    </section>
+
+    <section class="grid">
+      <div class="panel">
+        <h2>Packet Timeline</h2>
+        <table>
+          <thead><tr><th>time</th><th>state</th><th>len</th><th>ASCII</th><th>cipher hex</th></tr></thead>
+          <tbody id="packets"></tbody>
+        </table>
+      </div>
+      <div class="panel detail">
+        <h2>Selected Packet</h2>
+        <h3>Plain ASCII</h3>
+        <pre id="plainAscii"></pre>
+        <h3>Plain Hex</h3>
+        <pre id="plainHex"></pre>
+        <h3>Cipher Hex</h3>
+        <pre id="cipherHex"></pre>
+      </div>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

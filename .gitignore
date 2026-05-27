@@ -10,3 +10,5 @@ compile_commands.json
 .cache/
 .clangd/
 .superpowers/
+__pycache__/
+*.pyc

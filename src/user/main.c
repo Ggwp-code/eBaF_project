@@ -30,6 +30,8 @@ int main(int argc, char **argv)
 	time_t start_time;
 	int err;
 
+	setvbuf(stdout, NULL, _IOLBF, 0);
+
 	if (ebaf_parse_args(argc, argv, &cfg) != 0) {
 		usage(argv[0]);
 		return 1;

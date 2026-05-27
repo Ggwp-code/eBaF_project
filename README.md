@@ -52,6 +52,28 @@ The benchmark smoke test sends `EBAF` UDP packets for a short fixed duration and
 
 The correctness test encrypts a known plaintext body, feeds the captured ciphertext through decrypt mode, and expects the original plaintext.
 
+## Live Cipher Dashboard
+
+Run a local server-to-client demo with real packets crossing a temporary veth pair:
+
+```bash
+sudo scripts/demo_live_cipher.py --duration 30
+```
+
+Open:
+
+```text
+http://127.0.0.1:8088
+```
+
+The dashboard shows a Wireshark-style packet timeline, plaintext ASCII, plaintext hex, ciphertext hex, live counters, and throughput graphs. It cleans up the namespace and detaches XDP when stopped.
+
+Smoke test:
+
+```bash
+sudo make demo-smoke
+```
+
 ## Packet Format
 
 The XDP program processes IPv4/UDP packets whose destination port matches `--port`. UDP payload starts with:
