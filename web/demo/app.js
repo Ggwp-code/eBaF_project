@@ -1,96 +1,155 @@
-const history = [];
-let selected = null;
-let latestPackets = [];
+let rows = [];
+let selectedIndex = 0;
+let packetBase = 340;
+let latestStats = {};
 
-function byId(id) { return document.getElementById(id); }
+const $ = (id) => document.getElementById(id);
 
-function setText(id, text) { byId(id).textContent = text; }
-
-function drawChart() {
-  const canvas = byId("chart");
-  const ctx = canvas.getContext("2d");
-  const w = canvas.width, h = canvas.height;
-  ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = "#0d141c";
-  ctx.fillRect(0, 0, w, h);
-  ctx.strokeStyle = "#263545";
-  ctx.lineWidth = 1;
-  for (let i = 0; i < 5; i++) {
-    const y = 20 + i * ((h - 40) / 4);
-    ctx.beginPath(); ctx.moveTo(40, y); ctx.lineTo(w - 10, y); ctx.stroke();
-  }
-  const max = Math.max(1, ...history.flatMap(p => [p.pps, p.okr]));
-  function line(key, color) {
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    history.forEach((p, i) => {
-      const x = 40 + i * ((w - 60) / Math.max(history.length - 1, 1));
-      const y = h - 20 - (p[key] / max) * (h - 45);
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    });
-    ctx.stroke();
-  }
-  line("pps", "#64b5f6");
-  line("okr", "#33d17a");
-  ctx.fillStyle = "#89a1b7";
-  ctx.font = "12px ui-monospace";
-  ctx.fillText(`max ${max}/s`, 8, 18);
-  ctx.fillStyle = "#64b5f6"; ctx.fillText("pps", 48, h - 6);
-  ctx.fillStyle = "#33d17a"; ctx.fillText("crypto_ok/s", 92, h - 6);
+function esc(text) {
+  return String(text ?? "").replace(/[&<>"']/g, ch => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[ch]));
 }
 
-function renderPackets(packets) {
-  latestPackets = packets || [];
-  const body = byId("packets");
-  body.innerHTML = "";
-  latestPackets.slice(0, 40).forEach((p, idx) => {
-    const tr = document.createElement("tr");
-    tr.onclick = () => selectPacket(p);
-    tr.innerHTML = `<td>${p.time || ""}</td><td>${p.state || ""}</td><td>${p.length || 0}</td>` +
-      `<td>${(p.plain_ascii || "").slice(0, 48)}</td><td>${(p.cipher_hex || "").slice(0, 72)}</td>`;
-    body.appendChild(tr);
-    if (!selected && idx === 0) selectPacket(p);
+function sourceFor() { return "10.66.0.2"; }
+function destFor() { return "10.66.0.1"; }
+
+function shortInfo(packet) {
+  const name = packet.kind ? packet.kind.toUpperCase() : "PAYLOAD";
+  return `${name} plaintext -> AES-CBC ciphertext, seq=${packet.seq ?? "?"}`;
+}
+
+function changedBytes(packet) {
+  const a = (packet.plain_hex || "").replace(/\s+/g, "").match(/.{1,2}/g) || [];
+  const b = (packet.cipher_hex || "").replace(/\s+/g, "").match(/.{1,2}/g) || [];
+  let changed = 0;
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    if (a[i] !== b[i]) changed++;
+  }
+  return changed;
+}
+
+function renderRows(packets) {
+  const tbody = $("packets");
+  rows = (packets || []).slice(0, 80).map((packet, idx) => ({
+    ...packet,
+    no: packetBase + idx,
+    rel: ((Date.now() % 100000) / 1000 - idx * 0.052).toFixed(6),
+  }));
+  tbody.innerHTML = rows.map((packet, idx) => `
+    <tr class="${idx === selectedIndex ? "selected" : ""}" data-idx="${idx}">
+      <td>${packet.no}</td>
+      <td>${packet.rel}</td>
+      <td>${sourceFor(packet)}</td>
+      <td>${destFor(packet)}</td>
+      <td>UDP/EBAF</td>
+      <td>${packet.length || 0}</td>
+      <td>encrypt</td>
+      <td>${esc(shortInfo(packet))}</td>
+    </tr>
+  `).join("");
+  tbody.querySelectorAll("tr").forEach(tr => {
+    tr.onclick = () => {
+      selectedIndex = Number(tr.dataset.idx);
+      renderRows(rows);
+      renderSelected();
+    };
   });
+  if (selectedIndex >= rows.length) selectedIndex = 0;
+  renderSelected();
 }
 
-function selectPacket(packet) {
-  selected = packet;
-  setText("plainAscii", packet.plain_ascii || "(captured packet already encrypted)");
-  setText("plainHex", packet.plain_hex || "(not available for captured row)");
-  setText("cipherHex", packet.cipher_hex || "(waiting for transformed packet)");
+function splitBytes(hexText) {
+  return (hexText || "").replace(/\s+/g, "").match(/.{1,2}/g) || [];
 }
 
-async function update() {
+function groupedHex(plainHex, cipherHex) {
+  const plain = splitBytes(plainHex);
+  const cipher = splitBytes(cipherHex);
+  const bytes = cipher.length ? cipher : plain;
+  const lines = [];
+  for (let i = 0; i < bytes.length; i += 16) {
+    const chunk = bytes.slice(i, i + 16).map((b, j) => {
+      const idx = i + j;
+      return plain[idx] && cipher[idx] && plain[idx] !== cipher[idx] ? `[${b}]` : ` ${b} `;
+    });
+    const left = chunk.slice(0, 8).join("");
+    const right = chunk.slice(8).join("");
+    lines.push(`${i.toString(16).padStart(4, "0")}  ${left.padEnd(32)} ${right}`);
+  }
+  return lines.join("\n");
+}
+
+function asciiFromHex(hexText) {
+  const bytes = splitBytes(hexText);
+  const chars = bytes.map(b => {
+    const n = parseInt(b, 16);
+    return n >= 32 && n <= 126 ? String.fromCharCode(n) : ".";
+  });
+  const lines = [];
+  for (let i = 0; i < chars.length; i += 16) {
+    lines.push(chars.slice(i, i + 16).join(""));
+  }
+  return lines.join("\n");
+}
+
+function renderSelected() {
+  const packet = rows[selectedIndex];
+  if (!packet) return;
+  const changed = changedBytes(packet);
+  const total = packet.length || 0;
+  const ratio = total ? Math.round((changed / total) * 100) : 0;
+  $("details").innerHTML = `
+    <div class="tree-row">▾ Datagram ${packet.no}: ${total + 24} byte eBaF message delivered to local UDP server</div>
+    <div class="tree-row child">Arrival: ${packet.time || "live"}   Path: namespace client → veth → XDP → UDP server</div>
+    <div class="tree-row">▾ Local UDP Client, Src: ${sourceFor(packet)}, Dst: ${destFor(packet)}</div>
+    <div class="tree-row">▾ Internet Protocol Version 4, Src: ${sourceFor(packet)}, Dst: ${destFor(packet)}</div>
+    <div class="tree-row">▾ User Datagram Protocol, Src Port: 4242, Dst Port: 7777</div>
+    <div class="tree-row selected">▾ XDP Crypto Transform</div>
+    <div class="tree-row child shade">Program: ebaf xdp_crypto   Action: encrypt   Cipher: AES-128-CBC</div>
+    <div class="tree-row child">Result: crypto_ok   Changed bytes: ${changed}/${total} (${ratio}%)</div>
+    <div class="tree-row child shade">Plaintext preview: ${esc(packet.plain_ascii || "not paired")}</div>
+    <div class="tree-row child">Ciphertext preview: ${esc(packet.cipher_hex || "waiting")}</div>
+    <div class="tree-row">▾ Runtime Counters</div>
+    <div class="tree-row child shade">seen=${latestStats.seen || 0} passed=${latestStats.passed || 0} crypto_ok=${latestStats.crypto_ok || 0} crypto_fail=${latestStats.crypto_fail || 0}</div>
+  `;
+  $("hexPane").textContent = groupedHex(packet.plain_hex, packet.cipher_hex);
+  $("asciiPane").textContent = [
+    "Plaintext:",
+    packet.plain_ascii || "",
+    "",
+    "Ciphertext bytes interpreted as ASCII:",
+    asciiFromHex(packet.cipher_hex || "")
+  ].join("\n");
+  $("ident").textContent = `Selected transform: ${changed}/${total} payload bytes changed by XDP`;
+}
+
+async function refresh() {
   try {
     const res = await fetch("/api/snapshot", { cache: "no-store" });
     const data = await res.json();
-    setText("status", `${data.status} | iface ${data.iface} | ${data.mode} ${data.algo} UDP/${data.port} | uptime ${data.uptime_sec}s`);
-    setText("seen", data.stats.seen || 0);
-    setText("ok", data.stats.crypto_ok || 0);
-    setText("fail", data.stats.crypto_fail || 0);
-    setText("pps", data.pps || 0);
-    setText("okr", data.crypto_ok_rate || 0);
-    history.push({ pps: data.pps || 0, okr: data.crypto_ok_rate || 0 });
-    while (history.length > 90) history.shift();
-    renderPackets(data.packets);
-    drawChart();
+    latestStats = data.stats || {};
+    $("status").textContent =
+      `${data.status} · ${data.iface} · ${data.mode}/${data.algo} · UDP ${data.port} · ` +
+      `seen ${latestStats.seen || 0} · crypto_ok ${latestStats.crypto_ok || 0} · fail ${latestStats.crypto_fail || 0}`;
+    $("counts").textContent =
+      `Packets: ${latestStats.seen || 0} · Displayed: ${(data.packets || []).length} (100.0%) · ` +
+      `paired transforms: ${data.capture_count || 0} · UDP client sends: ${data.sender_count || 0} · UDP server receives: ${data.server_count || 0} · Profile: Default`;
+    renderRows(data.packets || []);
   } catch (err) {
-    setText("status", `disconnected: ${err}`);
+    $("status").textContent = `disconnected · ${err}`;
   }
 }
 
-byId("reset").onclick = () => {
-  history.length = 0;
-  selected = null;
-  renderPackets(latestPackets);
-  drawChart();
+$("reset").onclick = () => {
+  selectedIndex = 0;
+  renderRows(rows);
 };
 
-byId("stop").onclick = async () => {
+$("stop").onclick = async () => {
   await fetch("/api/stop", { method: "POST" });
-  setText("status", "stopping...");
+  $("status").textContent = "stopping capture...";
 };
 
-setInterval(update, 1000);
-update();
+setInterval(refresh, 1000);
+refresh();

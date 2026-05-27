@@ -237,6 +237,7 @@ int xdp_crypto(struct xdp_md *ctx)
 		rc = -1;
 
 	if (rc == 0) {
+		udp->check = 0;
 		if (stats)
 			stat_inc(&stats->packets_crypto_ok);
 	} else {

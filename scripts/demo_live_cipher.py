@@ -40,17 +40,9 @@ def hex_preview(data, limit=96):
     return " ".join(f"{b:02x}" for b in data[:limit])
 
 
-def make_frame(src_mac, dst_mac, body, seq):
-    iv = bytes(((seq + i) & 0xFF) for i in range(16))
-    payload = b"EBAF" + bytes([1, 1]) + len(body).to_bytes(2, "big") + iv + body
-    src_ip = socket.inet_aton("10.66.0.2")
-    dst_ip = socket.inet_aton("10.66.0.1")
-    udp = struct.pack("!HHHH", 4242, UDP_PORT, 8 + len(payload), 0)
-    total_len = 20 + len(udp) + len(payload)
-    ip0 = struct.pack("!BBHHHBBH4s4s", 0x45, 0, total_len, seq & 0xFFFF, 0, 64,
-                      IPPROTO_UDP, 0, src_ip, dst_ip)
-    ip = ip0[:10] + struct.pack("!H", checksum(ip0)) + ip0[12:]
-    return dst_mac + src_mac + struct.pack("!H", ETH_P_IP) + ip + udp + payload
+def make_payload(body, seq):
+	iv = bytes(((seq + i) & 0xFF) for i in range(16))
+	return b"EBAF" + bytes([1, 1]) + len(body).to_bytes(2, "big") + iv + body
 
 
 class DemoState:
@@ -66,8 +58,10 @@ class DemoState:
         self.crypto_ok_rate = 0
         self.packets = []
         self.samples = []
+        self.pending_plain = []
         self.sender_count = 0
         self.capture_count = 0
+        self.server_count = 0
         self.app_lines = []
         self.status = "starting"
         self.error = ""
@@ -91,6 +85,7 @@ class DemoState:
                 "samples": list(self.samples),
                 "sender_count": self.sender_count,
                 "capture_count": self.capture_count,
+                "server_count": self.server_count,
                 "app_pid": self.app_pid,
                 "app_lines": list(self.app_lines[-12:]),
             }
@@ -124,6 +119,27 @@ class DemoState:
             if packet.get("cipher_hex"):
                 self.samples.insert(0, packet)
                 self.samples = self.samples[:8]
+
+    def queue_plain(self, packet):
+        with self.lock:
+            self.pending_plain.append(packet)
+            self.pending_plain = self.pending_plain[-256:]
+            self.sender_count += 1
+
+    def pair_cipher(self, cipher_hex, length):
+        with self.lock:
+            plain = self.pending_plain.pop(0) if self.pending_plain else {}
+            self.capture_count += 1
+        return {
+            "time": time.strftime("%H:%M:%S"),
+            "seq": plain.get("seq"),
+            "kind": plain.get("kind", "payload"),
+            "plain_ascii": plain.get("plain_ascii", ""),
+            "plain_hex": plain.get("plain_hex", ""),
+            "cipher_hex": cipher_hex,
+            "length": length,
+            "state": "xdp_encrypt",
+        }
 
 
 class Demo:
@@ -173,7 +189,8 @@ class Demo:
 
     def start_threads(self):
         self.state.status = "running"
-        threading.Thread(target=self._capture_loop, daemon=True).start()
+        threading.Thread(target=self._server_loop, daemon=True).start()
+        threading.Thread(target=self._tap_loop, daemon=True).start()
         threading.Thread(target=self._send_loop, daemon=True).start()
         if self.args.duration:
             threading.Thread(target=self._duration_loop, daemon=True).start()
@@ -186,33 +203,56 @@ class Demo:
         seq = 0
         sender = (
             "import socket,sys,time;"
-            "iface=sys.argv[1];frames=sys.argv[2:];"
-            "s=socket.socket(socket.AF_PACKET,socket.SOCK_RAW);s.bind((iface,0));"
-            "[(s.send(bytes.fromhex(f)), time.sleep(0.05)) for f in frames];s.close()"
+            "dst=sys.argv[1];port=int(sys.argv[2]);payloads=sys.argv[3:];"
+            "s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);"
+            "s.setsockopt(socket.SOL_SOCKET, 11, 1);"
+            "[(s.sendto(bytes.fromhex(p),(dst,port)), time.sleep(0.05)) for p in payloads];"
+            "s.close()"
         )
+        messages = [
+            ("login", "POST /login user=miku role=admin token=demo"),
+            ("metrics", "GET /metrics cpu=07 mem=42 xdp=active"),
+            ("chat", "MSG client says hello from live cipher demo"),
+            ("order", "PAY order=1042 amount=19.99 currency=USD"),
+            ("health", "PING service=edge-gateway status=green"),
+            ("search", "GET /api/search?q=ebpf+xdp+crypto"),
+        ]
         while not self.state.stop.is_set():
-            frames = []
+            payloads = []
             for _ in range(16):
-                text = f"server->client live cipher packet {seq:06d} 0123456789ABCDEF"
-                body = text.encode("ascii")[:48].ljust(48, b" ")
-                frame = make_frame(self.ns_mac, self.host_mac, body, seq)
-                frames.append(frame.hex())
-                self.state.add_packet({
+                kind, template = messages[seq % len(messages)]
+                text = f"{template} seq={seq:06d}"
+                body = text.encode("ascii")[:64].ljust(64, b" ")
+                payloads.append(make_payload(body, seq).hex())
+                self.state.queue_plain({
                     "time": time.strftime("%H:%M:%S"),
                     "seq": seq,
+                    "kind": kind,
                     "plain_ascii": ascii_preview(body),
                     "plain_hex": hex_preview(body),
-                    "cipher_hex": "",
                     "length": len(body),
-                    "state": "sent",
                 })
-                with self.state.lock:
-                    self.state.sender_count += 1
                 seq += 1
-            subprocess.run(["ip", "netns", "exec", self.ns, "python3", "-c", sender, self.ns_if, *frames],
+            subprocess.run(["ip", "netns", "exec", self.ns, "python3", "-c", sender,
+                            "10.66.0.1", str(UDP_PORT), *payloads],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    def _capture_loop(self):
+    def _server_loop(self):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind(("10.66.0.1", UDP_PORT))
+        sock.settimeout(0.5)
+        while not self.state.stop.is_set():
+            try:
+                payload, _addr = sock.recvfrom(65535)
+            except socket.timeout:
+                continue
+            parsed = self._parse_payload(payload)
+            if parsed:
+                with self.state.lock:
+                    self.state.server_count += 1
+        sock.close()
+
+    def _tap_loop(self):
         sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_IP))
         sock.bind((self.host_if, 0))
         sock.settimeout(0.5)
@@ -221,14 +261,14 @@ class Demo:
                 packet = sock.recv(65535)
             except socket.timeout:
                 continue
-            parsed = self._parse_packet(packet)
-            if parsed:
-                with self.state.lock:
-                    self.state.capture_count += 1
-                self.state.add_packet(parsed)
+            payload = self._packet_payload(packet)
+            if payload:
+                parsed = self._parse_payload(payload)
+                if parsed:
+                    self.state.add_packet(parsed)
         sock.close()
 
-    def _parse_packet(self, packet):
+    def _packet_payload(self, packet):
         if len(packet) < 14 + 20 + 8 + 24 or packet[12:14] != b"\x08\x00":
             return None
         if packet[23] != IPPROTO_UDP:
@@ -239,20 +279,14 @@ class Demo:
             return None
         if struct.unpack("!H", packet[udp_off + 2:udp_off + 4])[0] != UDP_PORT:
             return None
-        payload = packet[udp_off + 8:]
+        return packet[udp_off + 8:]
+
+    def _parse_payload(self, payload):
         if len(payload) < 24 or payload[:4] != b"EBAF":
             return None
         body_len = struct.unpack("!H", payload[6:8])[0]
         body = payload[24:24 + body_len]
-        return {
-            "time": time.strftime("%H:%M:%S"),
-            "seq": None,
-            "plain_ascii": "",
-            "plain_hex": "",
-            "cipher_hex": hex_preview(body),
-            "length": len(body),
-            "state": "captured",
-        }
+        return self.state.pair_cipher(hex_preview(body), len(body))
 
     def cleanup(self):
         self.state.stop.set()

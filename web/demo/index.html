@@ -3,54 +3,66 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>eBaF Live Cipher Dashboard</title>
+  <title>eBaF capture - Live Cipher</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <header>
-    <div>
-      <h1>eBaF Live Cipher Dashboard</h1>
-      <p id="status">connecting...</p>
+  <div class="window">
+    <div class="toolbar">
+      <button title="Start capture">◢</button>
+      <button id="stop" title="Stop demo">■</button>
+      <button id="reset" title="Reset view">↻</button>
+      <button title="Open">▣</button>
+      <button title="Save">▤</button>
+      <span class="sep"></span>
+      <button title="Find">⌕</button>
+      <button title="Back">←</button>
+      <button title="Forward">→</button>
+      <button title="Zoom in">⊕</button>
+      <button title="Zoom out">⊖</button>
+      <span class="statusline" id="status">connecting...</span>
     </div>
-    <div class="actions">
-      <button id="reset">Reset View</button>
-      <button id="stop">Stop Demo</button>
+
+    <div class="filterbar">
+      <button class="bookmark">▶</button>
+      <input value="udp.port == 7777 && ebaf.crypto" aria-label="display filter">
+      <button class="apply">➜</button>
+      <button class="expr">Expression...</button>
+      <button class="plus">+</button>
     </div>
-  </header>
 
-  <main>
-    <section class="metrics">
-      <div><span id="seen">0</span><label>seen</label></div>
-      <div><span id="ok">0</span><label>crypto ok</label></div>
-      <div><span id="fail">0</span><label>crypto fail</label></div>
-      <div><span id="pps">0</span><label>pps</label></div>
-      <div><span id="okr">0</span><label>ok/sec</label></div>
+    <section class="packet-list">
+      <table>
+        <thead>
+          <tr>
+            <th>No.</th><th>Time</th><th>Source</th><th>Destination</th>
+            <th>Protocol</th><th>Length</th><th>Transform</th><th>Info</th>
+          </tr>
+        </thead>
+        <tbody id="packets"></tbody>
+      </table>
     </section>
 
-    <section class="panel chart-panel">
-      <h2>Live Throughput</h2>
-      <canvas id="chart" width="1100" height="220"></canvas>
+    <section class="details" id="details">
+      <div class="tree-row">▸ Frame: waiting for packets</div>
+      <div class="tree-row">▸ Ethernet II</div>
+      <div class="tree-row">▸ Internet Protocol Version 4</div>
+      <div class="tree-row">▸ User Datagram Protocol</div>
+      <div class="tree-row">▸ eBaF Crypto</div>
     </section>
 
-    <section class="grid">
-      <div class="panel">
-        <h2>Packet Timeline</h2>
-        <table>
-          <thead><tr><th>time</th><th>state</th><th>len</th><th>ASCII</th><th>cipher hex</th></tr></thead>
-          <tbody id="packets"></tbody>
-        </table>
-      </div>
-      <div class="panel detail">
-        <h2>Selected Packet</h2>
-        <h3>Plain ASCII</h3>
-        <pre id="plainAscii"></pre>
-        <h3>Plain Hex</h3>
-        <pre id="plainHex"></pre>
-        <h3>Cipher Hex</h3>
-        <pre id="cipherHex"></pre>
-      </div>
+    <section class="bytes">
+      <pre id="hexPane"></pre>
+      <pre id="asciiPane"></pre>
     </section>
-  </main>
+
+    <footer>
+      <span class="dot"></span>
+      <span id="ident">Live eBPF/XDP cipher capture</span>
+      <span class="grow"></span>
+      <span id="counts">Packets: 0 · Displayed: 0 (100.0%) · Load time: live · Profile: Default</span>
+    </footer>
+  </div>
   <script src="/app.js"></script>
 </body>
 </html>
