@@ -164,7 +164,13 @@ int xdp_crypto(struct xdp_md *ctx)
 		return XDP_PASS;
 	}
 	data_len = payload_len - sizeof(*hdr);
-	if (data_len == 0 || (data_len & (EBAF_CRYPTO_BLOCK_BYTES - 1)) != 0) {
+	if (data_len == 0) {
+		if (stats)
+			stat_inc(&stats->packets_malformed);
+		return XDP_PASS;
+	}
+	if (config->algo == EBAF_ALGO_CBC_AES &&
+	    (data_len & (EBAF_CRYPTO_BLOCK_BYTES - 1)) != 0) {
 		if (stats)
 			stat_inc(&stats->packets_malformed);
 		return XDP_PASS;

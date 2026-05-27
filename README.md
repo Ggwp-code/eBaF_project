@@ -26,9 +26,12 @@ For lab-only testing, `000102030405060708090a0b0c0d0e0f` is the fixed AES-128 sa
 
 Optional runtime flags:
 
+- `--algo cbc-aes|chacha20`: cipher to use, default `cbc-aes`
 - `--port PORT`: UDP destination port to process, default `7777`
 - `--stats-interval SEC`: stats print interval, default `1`
 - `--duration SEC`: exit automatically after this many seconds
+
+`cbc-aes` uses a 16-byte key encoded as 32 hex characters. `chacha20` uses a 32-byte key encoded as 64 hex characters. `chacha20poly1305` is not exposed through this BPF crypto path on the tested kernel, so authenticated encryption remains future work outside this XDP kfunc path.
 
 ## Tests
 
@@ -58,9 +61,12 @@ The XDP program processes IPv4/UDP packets whose destination port matches `--por
 - action: `1` encrypt or `2` decrypt
 - payload length: big-endian 16-bit value
 - IV: 16 bytes
-- body: AES block-aligned bytes
+- body: cipher text/plaintext bytes; AES-CBC bodies must be 16-byte aligned
 
-Current crypto mode is `cbc(aes)` with AES-128 keys.
+Supported crypto modes:
+
+- `cbc-aes`: kernel `cbc(aes)`, AES-128-CBC
+- `chacha20`: kernel `chacha20`, 256-bit key stream cipher without Poly1305 authentication
 
 ## Safety
 

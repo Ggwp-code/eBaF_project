@@ -39,7 +39,8 @@ integration crypto smoke passed
 
 - Requires a kernel that exposes BPF crypto kfuncs through BTF.
 - Requires root privileges for XDP attachment and network namespace tests.
-- Uses `cbc(aes)` with packet-carried IV and AES block-aligned payloads.
+- Supports `cbc(aes)` with packet-carried IV and AES block-aligned payloads.
+- Supports `chacha20` as an unauthenticated stream cipher fallback; `chacha20poly1305` is not exposed through the tested BPF crypto kfunc path.
 - Per-packet cryptography can saturate CPU under high packet rates.
 - IPv4/UDP parsing is intentionally narrow; VLAN, IPv6, and fragmented traffic pass through.
 

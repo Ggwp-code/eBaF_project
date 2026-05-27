@@ -38,12 +38,21 @@ int create_crypto_ctx(void *ctx)
 	config = bpf_map_lookup_elem(&crypto_config, &key);
 	if (!config)
 		return -1;
-	if (config->key_len != EBAF_CRYPTO_KEY_BYTES)
+	if (config->algo == EBAF_ALGO_CBC_AES && config->key_len != EBAF_AES128_KEY_BYTES)
+		return -2;
+	if (config->algo == EBAF_ALGO_CHACHA20 && config->key_len != EBAF_CHACHA20_KEY_BYTES)
+		return -2;
+	if (config->algo != EBAF_ALGO_CBC_AES && config->algo != EBAF_ALGO_CHACHA20)
 		return -2;
 
 	__builtin_memcpy(params.type, "skcipher", sizeof("skcipher"));
-	__builtin_memcpy(params.algo, "cbc(aes)", sizeof("cbc(aes)"));
-	__builtin_memcpy(params.key, config->key, EBAF_CRYPTO_KEY_BYTES);
+	if (config->algo == EBAF_ALGO_CHACHA20) {
+		__builtin_memcpy(params.algo, "chacha20", sizeof("chacha20"));
+		__builtin_memcpy(params.key, config->key, EBAF_CHACHA20_KEY_BYTES);
+	} else {
+		__builtin_memcpy(params.algo, "cbc(aes)", sizeof("cbc(aes)"));
+		__builtin_memcpy(params.key, config->key, EBAF_AES128_KEY_BYTES);
+	}
 	params.key_len = config->key_len;
 
 	new_ctx = bpf_crypto_ctx_create(&params, sizeof(params), &err);

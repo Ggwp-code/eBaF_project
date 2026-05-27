@@ -19,7 +19,7 @@ static void handle_signal(int sig)
 static void usage(const char *prog)
 {
 	fprintf(stderr,
-		"usage: %s --iface IFACE --mode encrypt|decrypt --key HEXKEY [--port PORT] [--stats-interval SEC] [--duration SEC]\n",
+		"usage: %s --iface IFACE --mode encrypt|decrypt --key HEXKEY [--algo cbc-aes|chacha20] [--port PORT] [--stats-interval SEC] [--duration SEC]\n",
 		prog);
 }
 

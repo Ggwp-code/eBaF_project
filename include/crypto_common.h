@@ -13,7 +13,10 @@
 #define __be32 __u32
 #endif
 
-#define EBAF_CRYPTO_KEY_BYTES 16
+#define EBAF_AES128_KEY_BYTES 16
+#define EBAF_CHACHA20_KEY_BYTES 32
+#define EBAF_CRYPTO_KEY_BYTES EBAF_AES128_KEY_BYTES
+#define EBAF_CRYPTO_MAX_KEY_BYTES EBAF_CHACHA20_KEY_BYTES
 #define EBAF_CRYPTO_IV_BYTES 16
 #define EBAF_CRYPTO_BLOCK_BYTES 16
 #define EBAF_CRYPTO_IV_OFFSET 8
@@ -23,6 +26,8 @@
 #define EBAF_ACTION_PASS 0
 #define EBAF_ACTION_ENCRYPT 1
 #define EBAF_ACTION_DECRYPT 2
+#define EBAF_ALGO_CBC_AES 1
+#define EBAF_ALGO_CHACHA20 2
 
 struct ebaf_crypto_header {
 	__be32 magic;
@@ -33,9 +38,10 @@ struct ebaf_crypto_header {
 };
 
 struct ebaf_crypto_config {
-	__u8 key[EBAF_CRYPTO_KEY_BYTES];
+	__u8 key[EBAF_CRYPTO_MAX_KEY_BYTES];
 	__u32 key_len;
 	__u32 action;
+	__u32 algo;
 	__u16 udp_port;
 };
 

@@ -62,6 +62,7 @@ int ebaf_parse_args(int argc, char **argv, struct ebaf_user_config *cfg)
 	const char *iface = NULL;
 	const char *mode = NULL;
 	const char *key = NULL;
+	const char *algo = "cbc-aes";
 	unsigned int port = EBAF_DEFAULT_UDP_PORT;
 	unsigned int stats_interval_sec = 1;
 	unsigned int duration_sec = 0;
@@ -78,6 +79,8 @@ int ebaf_parse_args(int argc, char **argv, struct ebaf_user_config *cfg)
 			mode = argv[++i];
 		} else if (strcmp(argv[i], "--key") == 0 && i + 1 < argc) {
 			key = argv[++i];
+		} else if (strcmp(argv[i], "--algo") == 0 && i + 1 < argc) {
+			algo = argv[++i];
 		} else if (strcmp(argv[i], "--port") == 0 && i + 1 < argc) {
 			if (parse_uint(argv[++i], 1, 65535, &port) != 0)
 				return -1;
@@ -106,10 +109,19 @@ int ebaf_parse_args(int argc, char **argv, struct ebaf_user_config *cfg)
 	else
 		return -1;
 
-	if (ebaf_parse_hex_key(key, cfg->crypto.key, EBAF_CRYPTO_KEY_BYTES) != 0)
+	if (strcmp(algo, "cbc-aes") == 0) {
+		cfg->crypto.algo = EBAF_ALGO_CBC_AES;
+		cfg->crypto.key_len = EBAF_AES128_KEY_BYTES;
+	} else if (strcmp(algo, "chacha20") == 0) {
+		cfg->crypto.algo = EBAF_ALGO_CHACHA20;
+		cfg->crypto.key_len = EBAF_CHACHA20_KEY_BYTES;
+	} else {
+		return -1;
+	}
+
+	if (ebaf_parse_hex_key(key, cfg->crypto.key, cfg->crypto.key_len) != 0)
 		return -1;
 
-	cfg->crypto.key_len = EBAF_CRYPTO_KEY_BYTES;
 	cfg->crypto.udp_port = (__u16)port;
 	cfg->stats_interval_sec = stats_interval_sec;
 	cfg->duration_sec = duration_sec;
