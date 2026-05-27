@@ -66,7 +66,7 @@ iface = sys.argv[1]
 src_mac = bytes.fromhex(sys.argv[2].replace(":", ""))
 dst_mac = bytes.fromhex(sys.argv[3].replace(":", ""))
 dst_port = int(sys.argv[4])
-payload = b"A" * 40
+payload = b"A" * 32
 udp_payload = (
     b"EBAF"
     + bytes([1, 1])

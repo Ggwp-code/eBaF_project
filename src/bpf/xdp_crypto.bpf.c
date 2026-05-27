@@ -36,6 +36,7 @@ struct {
 
 extern int bpf_dynptr_from_xdp(struct xdp_md *xdp, __u64 flags, struct bpf_dynptr *ptr__uninit) __ksym;
 extern int bpf_dynptr_adjust(const struct bpf_dynptr *ptr, __u32 start, __u32 end) __ksym;
+extern int bpf_dynptr_clone(const struct bpf_dynptr *ptr, struct bpf_dynptr *clone__uninit) __ksym;
 extern int bpf_crypto_encrypt(struct bpf_crypto_ctx *ctx,
 			      const struct bpf_dynptr *src,
 			      const struct bpf_dynptr *dst,
@@ -65,9 +66,14 @@ int xdp_crypto(struct xdp_md *ctx)
 	struct iphdr *ip;
 	struct udphdr *udp;
 	struct bpf_dynptr pkt;
+	struct bpf_dynptr data_ptr;
+	struct bpf_dynptr iv_ptr;
 	void *payload;
 	__u32 payload_len;
 	__u32 payload_off;
+	__u32 data_len;
+	__u32 data_off;
+	__u32 iv_off;
 	__u32 zero = 0;
 	int rc;
 
@@ -152,6 +158,18 @@ int xdp_crypto(struct xdp_md *ctx)
 		return XDP_PASS;
 	}
 
+	if (payload_len < sizeof(*hdr)) {
+		if (stats)
+			stat_inc(&stats->packets_malformed);
+		return XDP_PASS;
+	}
+	data_len = payload_len - sizeof(*hdr);
+	if (data_len == 0 || (data_len & (EBAF_CRYPTO_BLOCK_BYTES - 1)) != 0) {
+		if (stats)
+			stat_inc(&stats->packets_malformed);
+		return XDP_PASS;
+	}
+
 	slot = bpf_map_lookup_elem(&crypto_ctx_map, &zero);
 	if (!slot) {
 		if (stats)
@@ -174,7 +192,31 @@ int xdp_crypto(struct xdp_md *ctx)
 	}
 
 	payload_off = payload - data;
-	rc = bpf_dynptr_adjust(&pkt, payload_off, payload_off + payload_len);
+	data_off = payload_off + sizeof(*hdr);
+	iv_off = payload_off + EBAF_CRYPTO_IV_OFFSET;
+
+	rc = bpf_dynptr_clone(&pkt, &data_ptr);
+	if (rc != 0) {
+		if (stats)
+			stat_inc(&stats->packets_crypto_fail);
+		return XDP_PASS;
+	}
+
+	rc = bpf_dynptr_adjust(&data_ptr, data_off, data_off + data_len);
+	if (rc != 0) {
+		if (stats)
+			stat_inc(&stats->packets_crypto_fail);
+		return XDP_PASS;
+	}
+
+	rc = bpf_dynptr_clone(&pkt, &iv_ptr);
+	if (rc != 0) {
+		if (stats)
+			stat_inc(&stats->packets_crypto_fail);
+		return XDP_PASS;
+	}
+
+	rc = bpf_dynptr_adjust(&iv_ptr, iv_off, iv_off + EBAF_CRYPTO_IV_BYTES);
 	if (rc != 0) {
 		if (stats)
 			stat_inc(&stats->packets_crypto_fail);
@@ -182,9 +224,9 @@ int xdp_crypto(struct xdp_md *ctx)
 	}
 
 	if (config->action == EBAF_ACTION_ENCRYPT)
-		rc = bpf_crypto_encrypt(crypto_ctx, &pkt, &pkt, NULL);
+		rc = bpf_crypto_encrypt(crypto_ctx, &data_ptr, &data_ptr, &iv_ptr);
 	else if (config->action == EBAF_ACTION_DECRYPT)
-		rc = bpf_crypto_decrypt(crypto_ctx, &pkt, &pkt, NULL);
+		rc = bpf_crypto_decrypt(crypto_ctx, &data_ptr, &data_ptr, &iv_ptr);
 	else
 		rc = -1;
 

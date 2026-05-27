@@ -42,7 +42,7 @@ int create_crypto_ctx(void *ctx)
 		return -2;
 
 	__builtin_memcpy(params.type, "skcipher", sizeof("skcipher"));
-	__builtin_memcpy(params.algo, "ecb(aes)", sizeof("ecb(aes)"));
+	__builtin_memcpy(params.algo, "cbc(aes)", sizeof("cbc(aes)"));
 	__builtin_memcpy(params.key, config->key, EBAF_CRYPTO_KEY_BYTES);
 	params.key_len = config->key_len;
 

@@ -38,7 +38,7 @@ integration crypto smoke passed
 
 - Requires a kernel that exposes BPF crypto kfuncs through BTF.
 - Requires root privileges for XDP attachment and network namespace tests.
-- Uses `ecb(aes)` for prototype compatibility; do not treat this as production cryptography.
+- Uses `cbc(aes)` with packet-carried IV and AES block-aligned payloads.
 - Per-packet cryptography can saturate CPU under high packet rates.
 - IPv4/UDP parsing is intentionally narrow; VLAN, IPv6, and fragmented traffic pass through.
 

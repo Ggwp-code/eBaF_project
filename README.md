@@ -44,6 +44,19 @@ integration crypto smoke passed
 
 The benchmark smoke test sends `EBAF` UDP packets for a short fixed duration and prints a packets-per-second sample.
 
+## Packet Format
+
+The XDP program processes IPv4/UDP packets whose destination port matches `--port`. UDP payload starts with:
+
+- magic: `EBAF`
+- version: `1`
+- action: `1` encrypt or `2` decrypt
+- payload length: big-endian 16-bit value
+- IV: 16 bytes
+- body: AES block-aligned bytes
+
+Current crypto mode is `cbc(aes)` with AES-128 keys.
+
 ## Safety
 
 Run first inside a network namespace or lab host. XDP programs can drop or modify live traffic.
