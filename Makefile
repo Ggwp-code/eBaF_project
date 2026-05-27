@@ -12,7 +12,7 @@ BPF_SRCS := src/bpf/crypto_ctx.bpf.c src/bpf/xdp_crypto.bpf.c
 BPF_OBJS := $(BPF_SRCS:src/bpf/%.c=$(BUILD_DIR)/%.o)
 SKELS := $(BPF_OBJS:$(BUILD_DIR)/%.o=$(BUILD_DIR)/%.skel.h)
 
-.PHONY: all check test integration-test correctness-test benchmark-smoke demo-smoke clean
+.PHONY: all check test integration-test correctness-test benchmark-smoke demo-smoke experiment clean
 
 all: $(BUILD_DIR)/ebaf-crypto
 
@@ -43,6 +43,10 @@ demo-smoke: $(BUILD_DIR)/ebaf-crypto
 	@tests/integration/test_demo_runner.sh; status=$$?; \
 	if [ $$status -eq 77 ]; then exit 0; fi; \
 	exit $$status
+
+experiment:
+	python3 scripts/run_experiment.py --out experiments/latest.json --repeat 3
+	python3 scripts/analyze_experiment.py experiments/latest.json
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
