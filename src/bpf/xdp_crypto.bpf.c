@@ -52,8 +52,6 @@ int xdp_crypto(struct xdp_md *ctx)
 	struct ebaf_crypto_config *config;
 	struct ebaf_crypto_stats *stats;
 	struct bpf_dynptr pkt;
-	struct bpf_dynptr iv;
-	__u8 iv_bytes[EBAF_CRYPTO_IV_BYTES];
 	__u32 zero = 0;
 	int rc;
 
@@ -94,18 +92,10 @@ int xdp_crypto(struct xdp_md *ctx)
 		return XDP_PASS;
 	}
 
-	__builtin_memcpy(iv_bytes, hdr->iv, sizeof(iv_bytes));
-	rc = bpf_dynptr_from_mem(iv_bytes, sizeof(iv_bytes), 0, &iv);
-	if (rc != 0) {
-		if (stats)
-			stat_inc(&stats->packets_crypto_fail);
-		return XDP_PASS;
-	}
-
 	if (config->action == EBAF_ACTION_ENCRYPT)
-		rc = bpf_crypto_encrypt(slot->ctx, &pkt, &pkt, &iv);
+		rc = bpf_crypto_encrypt(slot->ctx, &pkt, &pkt, NULL);
 	else if (config->action == EBAF_ACTION_DECRYPT)
-		rc = bpf_crypto_decrypt(slot->ctx, &pkt, &pkt, &iv);
+		rc = bpf_crypto_decrypt(slot->ctx, &pkt, &pkt, NULL);
 	else
 		rc = -1;
 
