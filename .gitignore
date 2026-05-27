@@ -1,0 +1,10 @@
+build/
+*.o
+*.skel.h
+*.ll
+*.log
+*.out
+*.pcap
+compile_commands.json
+.cache/
+.clangd/

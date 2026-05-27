@@ -1,0 +1,27 @@
+# eBPF XDP Cryptography Prototype
+
+This project implements an in-network cryptography prototype with eBPF and XDP.
+
+## Requirements
+
+- Linux kernel with BTF enabled
+- BPF crypto kfunc support visible through `/sys/kernel/btf/vmlinux`
+- clang and llc from LLVM
+- libbpf development headers
+- bpftool
+- iproute2
+- make
+
+Run `make check` before building. The probe fails fast when the running kernel cannot load this prototype.
+
+## Quick Start
+
+```bash
+make check
+make
+sudo ./build/ebaf-crypto --iface eth0 --mode decrypt --key 000102030405060708090a0b0c0d0e0f
+```
+
+## Safety
+
+Run first inside a network namespace or lab host. XDP programs can drop or modify live traffic.
