@@ -25,6 +25,7 @@ make check
 make
 make test
 sudo make integration-test
+sudo make correctness-test
 sudo make benchmark-smoke
 ```
 

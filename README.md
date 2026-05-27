@@ -35,6 +35,7 @@ Optional runtime flags:
 ```bash
 make test
 sudo make integration-test
+sudo make correctness-test
 sudo make benchmark-smoke
 ```
 
@@ -45,6 +46,8 @@ integration crypto smoke passed
 ```
 
 The benchmark smoke test sends `EBAF` UDP packets for a short fixed duration and prints a packets-per-second sample.
+
+The correctness test encrypts a known plaintext body, feeds the captured ciphertext through decrypt mode, and expects the original plaintext.
 
 ## Packet Format
 
