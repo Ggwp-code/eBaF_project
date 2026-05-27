@@ -19,21 +19,30 @@ Run `make check` before building. The probe fails fast when the running kernel c
 ```bash
 make check
 make
-sudo ./build/ebaf-crypto --iface eth0 --mode decrypt --key 000102030405060708090a0b0c0d0e0f
+sudo ./build/ebaf-crypto --iface eth0 --mode decrypt --key 000102030405060708090a0b0c0d0e0f --port 7777
 ```
+
+Optional runtime flags:
+
+- `--port PORT`: UDP destination port to process, default `7777`
+- `--stats-interval SEC`: stats print interval, default `1`
+- `--duration SEC`: exit automatically after this many seconds
 
 ## Tests
 
 ```bash
 make test
 sudo make integration-test
+sudo make benchmark-smoke
 ```
 
-The integration test creates a temporary network namespace and veth pair, attaches the XDP program, sends ping traffic plus a crafted `EBAF` frame, and expects:
+The integration test creates a temporary network namespace and veth pair, attaches the XDP program, sends ping traffic plus a crafted Ethernet/IPv4/UDP packet carrying an `EBAF` payload, and expects:
 
 ```text
 integration crypto smoke passed
 ```
+
+The benchmark smoke test sends `EBAF` UDP packets for a short fixed duration and prints a packets-per-second sample.
 
 ## Safety
 

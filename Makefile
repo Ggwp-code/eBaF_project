@@ -12,7 +12,7 @@ BPF_SRCS := src/bpf/crypto_ctx.bpf.c src/bpf/xdp_crypto.bpf.c
 BPF_OBJS := $(BPF_SRCS:src/bpf/%.c=$(BUILD_DIR)/%.o)
 SKELS := $(BPF_OBJS:$(BUILD_DIR)/%.o=$(BUILD_DIR)/%.skel.h)
 
-.PHONY: all check test integration-test clean
+.PHONY: all check test integration-test benchmark-smoke clean
 
 all: $(BUILD_DIR)/ebaf-crypto
 
@@ -24,6 +24,11 @@ test: $(BUILD_DIR)/test_config
 
 integration-test: $(BUILD_DIR)/ebaf-crypto
 	@tests/integration/test_xdp_smoke.sh; status=$$?; \
+	if [ $$status -eq 77 ]; then exit 0; fi; \
+	exit $$status
+
+benchmark-smoke: $(BUILD_DIR)/ebaf-crypto
+	@scripts/bench_smoke.sh; status=$$?; \
 	if [ $$status -eq 77 ]; then exit 0; fi; \
 	exit $$status
 

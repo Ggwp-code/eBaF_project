@@ -17,6 +17,7 @@
 #define EBAF_CRYPTO_IV_BYTES 16
 #define EBAF_CRYPTO_MAGIC 0x45424146u
 #define EBAF_CRYPTO_VERSION 1
+#define EBAF_DEFAULT_UDP_PORT 7777
 #define EBAF_ACTION_PASS 0
 #define EBAF_ACTION_ENCRYPT 1
 #define EBAF_ACTION_DECRYPT 2
@@ -33,6 +34,7 @@ struct ebaf_crypto_config {
 	__u8 key[EBAF_CRYPTO_KEY_BYTES];
 	__u32 key_len;
 	__u32 action;
+	__u16 udp_port;
 };
 
 struct ebaf_crypto_stats {

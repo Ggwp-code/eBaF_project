@@ -5,6 +5,14 @@
 
 char LICENSE[] SEC("license") = "GPL";
 
+#ifndef ETH_P_IP
+#define ETH_P_IP 0x0800
+#endif
+
+#ifndef IPPROTO_UDP
+#define IPPROTO_UDP 17
+#endif
+
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
 	__uint(max_entries, 1);
@@ -27,6 +35,7 @@ struct {
 } crypto_stats SEC(".maps");
 
 extern int bpf_dynptr_from_xdp(struct xdp_md *xdp, __u64 flags, struct bpf_dynptr *ptr__uninit) __ksym;
+extern int bpf_dynptr_adjust(const struct bpf_dynptr *ptr, __u32 start, __u32 end) __ksym;
 extern int bpf_crypto_encrypt(struct bpf_crypto_ctx *ctx,
 			      const struct bpf_dynptr *src,
 			      const struct bpf_dynptr *dst,
@@ -47,12 +56,18 @@ int xdp_crypto(struct xdp_md *ctx)
 {
 	void *data = (void *)(long)ctx->data;
 	void *data_end = (void *)(long)ctx->data_end;
-	struct ebaf_crypto_header *hdr = data;
+	struct ebaf_crypto_header *hdr;
 	struct ebaf_crypto_ctx_slot *slot;
 	struct bpf_crypto_ctx *crypto_ctx;
 	struct ebaf_crypto_config *config;
 	struct ebaf_crypto_stats *stats;
+	struct ethhdr *eth = data;
+	struct iphdr *ip;
+	struct udphdr *udp;
 	struct bpf_dynptr pkt;
+	void *payload;
+	__u32 payload_len;
+	__u32 payload_off;
 	__u32 zero = 0;
 	int rc;
 
@@ -60,6 +75,71 @@ int xdp_crypto(struct xdp_md *ctx)
 	if (stats)
 		stat_inc(&stats->packets_seen);
 
+	if ((void *)(eth + 1) > data_end) {
+		if (stats)
+			stat_inc(&stats->packets_malformed);
+		return XDP_PASS;
+	}
+
+	if (eth->h_proto != bpf_htons(ETH_P_IP)) {
+		if (stats)
+			stat_inc(&stats->packets_passed);
+		return XDP_PASS;
+	}
+
+	ip = (void *)(eth + 1);
+	if ((void *)(ip + 1) > data_end || ip->ihl < 5) {
+		if (stats)
+			stat_inc(&stats->packets_malformed);
+		return XDP_PASS;
+	}
+	if ((void *)ip + ip->ihl * 4 > data_end) {
+		if (stats)
+			stat_inc(&stats->packets_malformed);
+		return XDP_PASS;
+	}
+
+	if (ip->protocol != IPPROTO_UDP) {
+		if (stats)
+			stat_inc(&stats->packets_passed);
+		return XDP_PASS;
+	}
+
+	udp = (void *)ip + ip->ihl * 4;
+	if ((void *)(udp + 1) > data_end) {
+		if (stats)
+			stat_inc(&stats->packets_malformed);
+		return XDP_PASS;
+	}
+
+	config = bpf_map_lookup_elem(&crypto_config, &zero);
+	if (!config) {
+		if (stats)
+			stat_inc(&stats->packets_crypto_fail);
+		return XDP_PASS;
+	}
+
+	if (bpf_ntohs(udp->dest) != config->udp_port) {
+		if (stats)
+			stat_inc(&stats->packets_passed);
+		return XDP_PASS;
+	}
+
+	payload = (void *)(udp + 1);
+	payload_len = bpf_ntohs(udp->len);
+	if (payload_len < sizeof(*udp)) {
+		if (stats)
+			stat_inc(&stats->packets_malformed);
+		return XDP_PASS;
+	}
+	payload_len -= sizeof(*udp);
+	if (payload + payload_len > data_end) {
+		if (stats)
+			stat_inc(&stats->packets_malformed);
+		return XDP_PASS;
+	}
+
+	hdr = payload;
 	if ((void *)(hdr + 1) > data_end) {
 		if (stats)
 			stat_inc(&stats->packets_malformed);
@@ -69,13 +149,6 @@ int xdp_crypto(struct xdp_md *ctx)
 	if (hdr->magic != bpf_htonl(EBAF_CRYPTO_MAGIC) || hdr->version != EBAF_CRYPTO_VERSION) {
 		if (stats)
 			stat_inc(&stats->packets_passed);
-		return XDP_PASS;
-	}
-
-	config = bpf_map_lookup_elem(&crypto_config, &zero);
-	if (!config) {
-		if (stats)
-			stat_inc(&stats->packets_crypto_fail);
 		return XDP_PASS;
 	}
 
@@ -94,6 +167,14 @@ int xdp_crypto(struct xdp_md *ctx)
 	}
 
 	rc = bpf_dynptr_from_xdp(ctx, 0, &pkt);
+	if (rc != 0) {
+		if (stats)
+			stat_inc(&stats->packets_crypto_fail);
+		return XDP_PASS;
+	}
+
+	payload_off = payload - data;
+	rc = bpf_dynptr_adjust(&pkt, payload_off, payload_off + payload_len);
 	if (rc != 0) {
 		if (stats)
 			stat_inc(&stats->packets_crypto_fail);

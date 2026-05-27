@@ -11,9 +11,11 @@ This project implements an eBPF/XDP in-network cryptography prototype. It separa
 - Syscall BPF crypto context creation
 - XDP packet processing program
 - User-space loader and stats loop
+- Ethernet/IPv4/UDP parser with configurable destination port
 - Config parser unit tests
 - Namespace and veth integration smoke test
-- Crafted `EBAF` packet crypto-path assertion
+- Crafted UDP `EBAF` packet crypto-path assertion
+- Root-only benchmark smoke workflow
 - README verification workflow
 
 ## Verification
@@ -23,6 +25,7 @@ make check
 make
 make test
 sudo make integration-test
+sudo make benchmark-smoke
 ```
 
 Expected integration result:
@@ -37,10 +40,12 @@ integration crypto smoke passed
 - Requires root privileges for XDP attachment and network namespace tests.
 - Uses `ecb(aes)` for prototype compatibility; do not treat this as production cryptography.
 - Per-packet cryptography can saturate CPU under high packet rates.
+- IPv4/UDP parsing is intentionally narrow; VLAN, IPv6, and fragmented traffic pass through.
 
 ## Future Work
 
 - Add safer cipher mode support when kernel crypto kfunc constraints allow it.
+- Add VLAN and IPv6 parser coverage.
 - Add QAT offload path for high-throughput symmetric crypto.
 - Add SmartNIC offload path for XDP-capable NICs.
 - Add PQC control-plane prototype for Kyber or Dilithium key operations.

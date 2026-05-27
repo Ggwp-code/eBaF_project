@@ -10,6 +10,8 @@
 struct ebaf_user_config {
 	char iface[EBAF_IFACE_NAME_MAX];
 	struct ebaf_crypto_config crypto;
+	unsigned int stats_interval_sec;
+	unsigned int duration_sec;
 };
 
 int ebaf_parse_args(int argc, char **argv, struct ebaf_user_config *cfg);

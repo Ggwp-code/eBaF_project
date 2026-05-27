@@ -1,5 +1,8 @@
 #include "config.h"
 
+#include <errno.h>
+#include <limits.h>
+#include <stdlib.h>
 #include <string.h>
 
 static int hex_value(char c)
@@ -36,11 +39,32 @@ int ebaf_parse_hex_key(const char *hex, unsigned char *out, size_t out_len)
 	return 0;
 }
 
+static int parse_uint(const char *text, unsigned int min, unsigned int max,
+		      unsigned int *out)
+{
+	char *end = NULL;
+	unsigned long value;
+
+	if (!text || !out || text[0] == '\0')
+		return -1;
+
+	errno = 0;
+	value = strtoul(text, &end, 10);
+	if (errno != 0 || end == text || *end != '\0' || value < min || value > max)
+		return -1;
+
+	*out = (unsigned int)value;
+	return 0;
+}
+
 int ebaf_parse_args(int argc, char **argv, struct ebaf_user_config *cfg)
 {
 	const char *iface = NULL;
 	const char *mode = NULL;
 	const char *key = NULL;
+	unsigned int port = EBAF_DEFAULT_UDP_PORT;
+	unsigned int stats_interval_sec = 1;
+	unsigned int duration_sec = 0;
 
 	if (!cfg)
 		return -1;
@@ -54,6 +78,15 @@ int ebaf_parse_args(int argc, char **argv, struct ebaf_user_config *cfg)
 			mode = argv[++i];
 		} else if (strcmp(argv[i], "--key") == 0 && i + 1 < argc) {
 			key = argv[++i];
+		} else if (strcmp(argv[i], "--port") == 0 && i + 1 < argc) {
+			if (parse_uint(argv[++i], 1, 65535, &port) != 0)
+				return -1;
+		} else if (strcmp(argv[i], "--stats-interval") == 0 && i + 1 < argc) {
+			if (parse_uint(argv[++i], 1, UINT_MAX, &stats_interval_sec) != 0)
+				return -1;
+		} else if (strcmp(argv[i], "--duration") == 0 && i + 1 < argc) {
+			if (parse_uint(argv[++i], 1, UINT_MAX, &duration_sec) != 0)
+				return -1;
 		} else {
 			return -1;
 		}
@@ -77,5 +110,8 @@ int ebaf_parse_args(int argc, char **argv, struct ebaf_user_config *cfg)
 		return -1;
 
 	cfg->crypto.key_len = EBAF_CRYPTO_KEY_BYTES;
+	cfg->crypto.udp_port = (__u16)port;
+	cfg->stats_interval_sec = stats_interval_sec;
+	cfg->duration_sec = duration_sec;
 	return 0;
 }
