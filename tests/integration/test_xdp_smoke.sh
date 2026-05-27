@@ -6,7 +6,7 @@ if [[ "${EUID}" -ne 0 ]]; then
 	exit 77
 fi
 
-for cmd in ip ping timeout; do
+for cmd in ip ping python3 timeout; do
 	if ! command -v "${cmd}" >/dev/null 2>&1; then
 		echo "SKIP: ${cmd} missing"
 		exit 77
@@ -54,6 +54,25 @@ if ! kill -0 "${APP_PID}" >/dev/null 2>&1; then
 fi
 
 ip netns exec "${NS}" ping -c 2 -W 1 10.77.0.1 >/dev/null
+ip netns exec "${NS}" python3 - "${NS_IF}" <<'PY'
+import socket
+import sys
+
+iface = sys.argv[1]
+payload = b"A" * 40
+frame = (
+    b"EBAF"
+    + bytes([1, 1])
+    + len(payload).to_bytes(2, "big")
+    + bytes(range(16))
+    + payload
+)
+
+sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
+sock.bind((iface, 0))
+sock.send(frame)
+sock.close()
+PY
 sleep 2
 
 kill -TERM "${APP_PID}"
@@ -66,4 +85,10 @@ if ! grep -Eq 'seen=[1-9][0-9]*' "${LOG}"; then
 	exit 1
 fi
 
-echo "integration smoke passed"
+if ! grep -Eq 'crypto_ok=[1-9][0-9]*' "${LOG}"; then
+	cat "${LOG}"
+	echo "FAIL: no EBAF crypto packet processed"
+	exit 1
+fi
+
+echo "integration crypto smoke passed"
