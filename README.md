@@ -19,8 +19,10 @@ Run `make check` before building. The probe fails fast when the running kernel c
 ```bash
 make check
 make
-sudo ./build/ebaf-crypto --iface eth0 --mode decrypt --key 000102030405060708090a0b0c0d0e0f --port 7777
+sudo ./build/ebaf-crypto --iface eth0 --mode decrypt --key <32-hex-char-aes128-key> --port 7777
 ```
+
+For lab-only testing, `000102030405060708090a0b0c0d0e0f` is the fixed AES-128 sample key used by the integration scripts. Use a generated secret key for real traffic.
 
 Optional runtime flags:
 
