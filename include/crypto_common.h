@@ -3,6 +3,10 @@
 
 #include <linux/types.h>
 
+#ifndef __kptr
+#define __kptr
+#endif
+
 #define EBAF_CRYPTO_KEY_BYTES 16
 #define EBAF_CRYPTO_IV_BYTES 16
 #define EBAF_CRYPTO_MAGIC 0x45424146u
