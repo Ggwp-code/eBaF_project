@@ -49,6 +49,7 @@ int xdp_crypto(struct xdp_md *ctx)
 	void *data_end = (void *)(long)ctx->data_end;
 	struct ebaf_crypto_header *hdr = data;
 	struct ebaf_crypto_ctx_slot *slot;
+	struct bpf_crypto_ctx *crypto_ctx;
 	struct ebaf_crypto_config *config;
 	struct ebaf_crypto_stats *stats;
 	struct bpf_dynptr pkt;
@@ -79,7 +80,14 @@ int xdp_crypto(struct xdp_md *ctx)
 	}
 
 	slot = bpf_map_lookup_elem(&crypto_ctx_map, &zero);
-	if (!slot || !slot->ctx) {
+	if (!slot) {
+		if (stats)
+			stat_inc(&stats->packets_crypto_fail);
+		return XDP_PASS;
+	}
+
+	crypto_ctx = slot->ctx;
+	if (!crypto_ctx) {
 		if (stats)
 			stat_inc(&stats->packets_crypto_fail);
 		return XDP_PASS;
@@ -93,9 +101,9 @@ int xdp_crypto(struct xdp_md *ctx)
 	}
 
 	if (config->action == EBAF_ACTION_ENCRYPT)
-		rc = bpf_crypto_encrypt(slot->ctx, &pkt, &pkt, NULL);
+		rc = bpf_crypto_encrypt(crypto_ctx, &pkt, &pkt, NULL);
 	else if (config->action == EBAF_ACTION_DECRYPT)
-		rc = bpf_crypto_decrypt(slot->ctx, &pkt, &pkt, NULL);
+		rc = bpf_crypto_decrypt(crypto_ctx, &pkt, &pkt, NULL);
 	else
 		rc = -1;
 
