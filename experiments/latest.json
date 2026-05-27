@@ -1,0 +1,69 @@
+{
+  "created_at": 1779903064.0789247,
+  "results": [
+    {
+      "cmd": [
+        "make",
+        "check"
+      ],
+      "returncode": 0,
+      "duration_sec": 0.171,
+      "stdout": "make[1]: Entering directory '/home/hatsune_miku/eBaF_project'\n./scripts/check_kernel_features.sh\nPASS: BTF available\nPASS: clang available\nPASS: bpftool available\nPASS: ip command available\nPASS: bpf_crypto_encrypt kfunc visible in BTF\nPASS: bpf_dynptr_from_xdp kfunc visible in BTF\nmake[1]: Leaving directory '/home/hatsune_miku/eBaF_project'\n",
+      "stderr": "",
+      "name": "check",
+      "iteration": 0
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "correctness-test"
+      ],
+      "returncode": 0,
+      "duration_sec": 4.245,
+      "stdout": "integration crypto correctness passed\n",
+      "stderr": "",
+      "name": "correctness",
+      "iteration": 0
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "benchmark-smoke"
+      ],
+      "returncode": 0,
+      "duration_sec": 7.079,
+      "stdout": "seen=1809804 passed=6 crypto_ok=1809798 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2352086 duration=5s pps=470417\n",
+      "stderr": "",
+      "name": "benchmark",
+      "iteration": 0
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "benchmark-smoke"
+      ],
+      "returncode": 0,
+      "duration_sec": 7.097,
+      "stdout": "seen=1838433 passed=6 crypto_ok=1838427 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2392584 duration=5s pps=478516\n",
+      "stderr": "",
+      "name": "benchmark",
+      "iteration": 1
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "benchmark-smoke"
+      ],
+      "returncode": 0,
+      "duration_sec": 7.091,
+      "stdout": "seen=2300455 passed=6 crypto_ok=2300449 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2860132 duration=5s pps=572026\n",
+      "stderr": "",
+      "name": "benchmark",
+      "iteration": 2
+    }
+  ]
+}

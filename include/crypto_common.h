@@ -28,6 +28,7 @@
 #define EBAF_ACTION_DECRYPT 2
 #define EBAF_ALGO_CBC_AES 1
 #define EBAF_ALGO_CHACHA20 2
+#define EBAF_EVENT_SAMPLE_BYTES 32
 
 struct ebaf_crypto_header {
 	__be32 magic;
@@ -51,6 +52,28 @@ struct ebaf_crypto_stats {
 	__u64 packets_crypto_ok;
 	__u64 packets_crypto_fail;
 	__u64 packets_malformed;
+	__u64 packets_bad_eth;
+	__u64 packets_bad_ip;
+	__u64 packets_bad_udp;
+	__u64 packets_bad_magic;
+	__u64 packets_bad_length;
+	__u64 packets_bad_alignment;
+	__u64 packets_no_crypto_ctx;
+};
+
+struct ebaf_crypto_event {
+	__u64 timestamp_ns;
+	__be32 src_ip;
+	__be32 dst_ip;
+	__u16 src_port;
+	__u16 dst_port;
+	__u16 payload_len;
+	__u16 data_len;
+	__u8 action;
+	__u8 algo;
+	__u8 result;
+	__u8 sample_len;
+	__u8 sample[EBAF_EVENT_SAMPLE_BYTES];
 };
 
 struct ebaf_crypto_ctx_slot {

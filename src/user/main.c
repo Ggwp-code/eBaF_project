@@ -19,7 +19,7 @@ static void handle_signal(int sig)
 static void usage(const char *prog)
 {
 	fprintf(stderr,
-		"usage: %s --iface IFACE --mode encrypt|decrypt --key HEXKEY [--algo cbc-aes|chacha20] [--port PORT] [--stats-interval SEC] [--duration SEC]\n",
+		"usage: %s --iface IFACE --mode encrypt|decrypt --key HEXKEY [--algo cbc-aes|chacha20] [--port PORT] [--stats-interval SEC] [--duration SEC] [--events] [--jsonl]\n",
 		prog);
 }
 
@@ -56,6 +56,8 @@ int main(int argc, char **argv)
 	start_time = time(NULL);
 	while (!exiting) {
 		ebaf_bpf_print_stats(&rt);
+		if (cfg.print_events)
+			ebaf_bpf_poll_events(&rt, 100);
 		if (cfg.duration_sec > 0 && time(NULL) - start_time >= (time_t)cfg.duration_sec)
 			break;
 		sleep(cfg.stats_interval_sec);

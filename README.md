@@ -1,6 +1,6 @@
-# eBPF XDP Cryptography Prototype
+# eBPF XDP In-Network Cryptography
 
-This project implements an in-network cryptography prototype with eBPF and XDP.
+This project is a research artifact for studying in-kernel UDP payload cryptography with eBPF, XDP, libbpf, and Linux BPF crypto kfuncs.
 
 ## Requirements
 
@@ -30,8 +30,29 @@ Optional runtime flags:
 - `--port PORT`: UDP destination port to process, default `7777`
 - `--stats-interval SEC`: stats print interval, default `1`
 - `--duration SEC`: exit automatically after this many seconds
+- `--events`: print one structured line for every packet transformed by XDP
+- `--jsonl`: print transformed packet events as JSON Lines; implies `--events`
 
 `cbc-aes` uses a 16-byte key encoded as 32 hex characters. `chacha20` uses a 32-byte key encoded as 64 hex characters. `chacha20poly1305` is not exposed through this BPF crypto path on the tested kernel, so authenticated encryption remains future work outside this XDP kfunc path.
+
+Packet event stream:
+
+```bash
+sudo ./build/ebaf-crypto --iface eth0 --mode encrypt --key 000102030405060708090a0b0c0d0e0f --port 7777 --events
+```
+
+Each event comes from a BPF ring buffer and includes timestamp, action, algorithm, IPv4 source/destination, UDP ports, payload sizes, and a post-transform payload sample.
+
+Backend evidence workflow:
+
+```bash
+make check
+make test
+sudo make correctness-test
+sudo make benchmark-smoke
+sudo make experiment
+sudo ./build/ebaf-crypto --iface <iface> --mode encrypt --key <hex> --port 7777 --events --jsonl
+```
 
 ## Tests
 
@@ -39,6 +60,7 @@ Optional runtime flags:
 make test
 sudo make integration-test
 sudo make correctness-test
+sudo make protocol-validation-test
 sudo make benchmark-smoke
 ```
 

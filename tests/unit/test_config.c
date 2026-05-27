@@ -65,6 +65,39 @@ static void test_parse_runtime_options(void)
 	expect_int("runtime duration", cfg.duration_sec, 9);
 }
 
+static void test_parse_events_option(void)
+{
+	char *argv[] = {
+		"ebaf-crypto",
+		"--iface", "veth0",
+		"--mode", "encrypt",
+		"--key", "000102030405060708090a0b0c0d0e0f",
+		"--events",
+	};
+	struct ebaf_user_config cfg;
+	int rc = ebaf_parse_args(8, argv, &cfg);
+
+	expect_int("parse events rc", rc, 0);
+	expect_int("events enabled", cfg.print_events, 1);
+}
+
+static void test_parse_jsonl_option(void)
+{
+	char *argv[] = {
+		"ebaf-crypto",
+		"--iface", "veth0",
+		"--mode", "encrypt",
+		"--key", "000102030405060708090a0b0c0d0e0f",
+		"--jsonl",
+	};
+	struct ebaf_user_config cfg;
+	int rc = ebaf_parse_args(8, argv, &cfg);
+
+	expect_int("parse jsonl rc", rc, 0);
+	expect_int("jsonl enabled", cfg.output_jsonl, 1);
+	expect_int("jsonl enables events", cfg.print_events, 1);
+}
+
 static void test_parse_chacha20_args(void)
 {
 	char *argv[] = {
@@ -179,6 +212,8 @@ int main(void)
 	test_parse_decrypt_args();
 	test_parse_encrypt_args();
 	test_parse_runtime_options();
+	test_parse_events_option();
+	test_parse_jsonl_option();
 	test_parse_chacha20_args();
 	test_reject_short_key();
 	test_reject_bad_mode();

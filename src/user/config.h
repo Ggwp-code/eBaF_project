@@ -12,6 +12,8 @@ struct ebaf_user_config {
 	struct ebaf_crypto_config crypto;
 	unsigned int stats_interval_sec;
 	unsigned int duration_sec;
+	int print_events;
+	int output_jsonl;
 };
 
 int ebaf_parse_args(int argc, char **argv, struct ebaf_user_config *cfg);

@@ -35,6 +35,16 @@ Expected integration result:
 integration crypto smoke passed
 ```
 
+## Backend Research Artifact
+
+The backend now exposes three evidence layers:
+
+1. Kernel counters for pass, crypto success, crypto failure, and validation failures.
+2. BPF ring-buffer packet events emitted from the XDP data path after successful transformation.
+3. Reproducible experiment JSON files under `experiments/`.
+
+This separates the research backend from the dashboard. The UI may visualize events, but the backend evidence is available without browser code.
+
 ## Constraints
 
 - Requires a kernel that exposes BPF crypto kfuncs through BTF.

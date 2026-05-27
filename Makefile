@@ -6,13 +6,13 @@ BPF_CFLAGS ?= -O2 -g -target bpf -D__TARGET_ARCH_x86
 BUILD_DIR := build
 VMLINUX := $(BUILD_DIR)/vmlinux.h
 
-USER_SRCS := src/user/main.c src/user/config.c src/user/bpf_loader.c
+USER_SRCS := src/user/main.c src/user/config.c src/user/bpf_loader.c src/user/event_format.c src/user/stats_format.c
 USER_OBJS := $(USER_SRCS:src/user/%.c=$(BUILD_DIR)/%.o)
 BPF_SRCS := src/bpf/crypto_ctx.bpf.c src/bpf/xdp_crypto.bpf.c
 BPF_OBJS := $(BPF_SRCS:src/bpf/%.c=$(BUILD_DIR)/%.o)
 SKELS := $(BPF_OBJS:$(BUILD_DIR)/%.o=$(BUILD_DIR)/%.skel.h)
 
-.PHONY: all check test integration-test correctness-test benchmark-smoke demo-smoke experiment clean
+.PHONY: all check test integration-test correctness-test protocol-validation-test benchmark-smoke demo-smoke experiment clean
 
 all: $(BUILD_DIR)/ebaf-crypto
 
@@ -31,6 +31,11 @@ integration-test: $(BUILD_DIR)/ebaf-crypto
 
 correctness-test: $(BUILD_DIR)/ebaf-crypto
 	@tests/integration/test_crypto_correctness.sh; status=$$?; \
+	if [ $$status -eq 77 ]; then exit 0; fi; \
+	exit $$status
+
+protocol-validation-test: $(BUILD_DIR)/ebaf-crypto
+	@tests/integration/test_protocol_validation.sh; status=$$?; \
 	if [ $$status -eq 77 ]; then exit 0; fi; \
 	exit $$status
 

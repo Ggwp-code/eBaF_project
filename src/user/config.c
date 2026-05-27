@@ -90,6 +90,11 @@ int ebaf_parse_args(int argc, char **argv, struct ebaf_user_config *cfg)
 		} else if (strcmp(argv[i], "--duration") == 0 && i + 1 < argc) {
 			if (parse_uint(argv[++i], 1, UINT_MAX, &duration_sec) != 0)
 				return -1;
+		} else if (strcmp(argv[i], "--events") == 0) {
+			cfg->print_events = 1;
+		} else if (strcmp(argv[i], "--jsonl") == 0) {
+			cfg->output_jsonl = 1;
+			cfg->print_events = 1;
 		} else {
 			return -1;
 		}
