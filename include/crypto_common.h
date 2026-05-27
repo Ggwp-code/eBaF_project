@@ -1,10 +1,16 @@
 #ifndef CRYPTO_COMMON_H
 #define CRYPTO_COMMON_H
 
+#ifndef __VMLINUX_H__
 #include <linux/types.h>
+#endif
 
 #ifndef __kptr
 #define __kptr
+#endif
+
+#ifndef __be32
+#define __be32 __u32
 #endif
 
 #define EBAF_CRYPTO_KEY_BYTES 16
