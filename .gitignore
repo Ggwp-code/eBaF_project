@@ -12,3 +12,5 @@ compile_commands.json
 .superpowers/
 __pycache__/
 *.pyc
+experiments/
+docs/superpowers/

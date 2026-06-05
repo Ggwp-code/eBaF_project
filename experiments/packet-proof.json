@@ -1,9 +1,0 @@
-{
-  "created_at": 1779990057.5854816,
-  "plaintext": "hello real app",
-  "plaintext_padded_hex": "68656c6c6f207265616c206170700202",
-  "encrypted_sample_hex": "85dffbc2abb17fd5d1d6114284f6d074",
-  "decrypted_sample_hex": "68656c6c6f207265616c206170700202",
-  "ciphertext_differs": true,
-  "decrypt_matches": true
-}
