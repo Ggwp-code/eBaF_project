@@ -1,94 +1,131 @@
-# eBPF XDP In-Network Cryptography
+# eBaF: eBPF In-Kernel UDP Crypto
 
-This project is a research artifact for studying in-kernel UDP payload cryptography with eBPF, XDP, libbpf, and Linux BPF crypto kfuncs.
+eBaF is a Linux research prototype for encrypting UDP payloads inside the kernel with eBPF, XDP, TC, libbpf, and BPF crypto kfuncs.
+
+It proves a real packet path:
+
+- Normal UDP apps can send plaintext.
+- TC transparent mode can pad, encrypt, and append crypto metadata.
+- A peer TC hook can decrypt before the receiving app sees the packet.
+- XDP and TC paths expose counters, packet events, proof artifacts, and repeatable benchmarks.
+
+This is lab software, not production security software.
+
+## What It Shows
+
+- `xdp`: packet crypto for `EBAF`-framed IPv4/UDP payloads.
+- `tc`: encrypt/decrypt path over veth and physical NIC egress.
+- `tc --transparent`: normal UDP payloads transformed without changing the app.
+- Live dashboard: Wireshark-like view of TC transparent UDP media traffic.
+- Physical NIC probe: native/generic XDP support, queues, IRQ hints, driver/offload metadata where available.
+- Benchmarks: local veth PPS, correctness proof, malformed packet counters.
 
 ## Requirements
 
 - Linux kernel with BTF enabled
-- BPF crypto kfunc support visible through `/sys/kernel/btf/vmlinux`
-- clang and llc from LLVM
+- BPF crypto kfuncs visible through `/sys/kernel/btf/vmlinux`
+- `clang`, `bpftool`, `iproute2`, `make`
 - libbpf development headers
-- bpftool
-- iproute2
-- make
+- `ffmpeg` for the live media dashboard
 
-Run `make check` before building. The probe fails fast when the running kernel cannot load this prototype.
+Check the host first:
+
+```bash
+make check
+```
 
 ## Quick Start
 
+Build:
+
 ```bash
-make check
 make
-sudo ./build/ebaf-crypto --iface eth0 --mode decrypt --key <32-hex-char-aes128-key> --port 7777
 ```
 
-For lab-only testing, `000102030405060708090a0b0c0d0e0f` is the fixed AES-128 sample key used by the integration scripts. Use a generated secret key for real traffic.
-
-Optional runtime flags:
-
-- `--algo cbc-aes|chacha20`: cipher to use, default `cbc-aes`
-- `--port PORT`: UDP destination port to process, default `7777`
-- `--stats-interval SEC`: stats print interval, default `1`
-- `--duration SEC`: exit automatically after this many seconds
-- `--events`: print one structured line for every packet transformed by XDP
-- `--jsonl`: print transformed packet events as JSON Lines; implies `--events`
-
-`cbc-aes` uses a 16-byte key encoded as 32 hex characters. `chacha20` uses a 32-byte key encoded as 64 hex characters. `chacha20poly1305` is not exposed through this BPF crypto path on the tested kernel, so authenticated encryption remains future work outside this XDP kfunc path.
-
-Packet event stream:
+Run the full backend gate:
 
 ```bash
-sudo ./build/ebaf-crypto --iface eth0 --mode encrypt --key 000102030405060708090a0b0c0d0e0f --port 7777 --events
+sudo make backend-gate
 ```
 
-Each event comes from a BPF ring buffer and includes timestamp, action, algorithm, IPv4 source/destination, UDP ports, payload sizes, and a post-transform payload sample.
-
-Backend evidence workflow:
+Run a live TC transparent media dashboard:
 
 ```bash
-make check
-make test
-sudo make correctness-test
-sudo make benchmark-smoke
-sudo make experiment
-sudo ./build/ebaf-crypto --iface <iface> --mode encrypt --key <hex> --port 7777 --events --jsonl
+sudo python3 scripts/demo_live_cipher.py --port 8000
 ```
 
-## Tests
+Open:
+
+```text
+http://127.0.0.1:8000
+```
+
+Use your own video as UDP source:
+
+```bash
+sudo python3 scripts/demo_live_cipher.py --port 8000 --media-file /path/to/video.mp4
+```
+
+## Runtime Examples
+
+XDP or TC framed packet mode:
+
+```bash
+sudo ./build/ebaf-crypto --iface eth0 --mode encrypt --hook xdp --key 000102030405060708090a0b0c0d0e0f --port 7777 --events --jsonl
+```
+
+TC transparent mode:
+
+```bash
+sudo ./build/ebaf-crypto --iface eth0 --mode encrypt --hook tc --transparent --key 000102030405060708090a0b0c0d0e0f --port 7777 --events --jsonl
+```
+
+Decrypt transparent traffic on the peer:
+
+```bash
+sudo ./build/ebaf-crypto --iface eth0 --mode decrypt --hook tc --transparent --key 000102030405060708090a0b0c0d0e0f --port 7777 --events --jsonl
+```
+
+The fixed key above is only for lab scripts. Generate a real secret for any real traffic.
+
+## Useful Commands
 
 ```bash
 make test
 sudo make integration-test
 sudo make correctness-test
 sudo make protocol-validation-test
+sudo make tc-transparent-test
 sudo make benchmark-smoke
+sudo make experiment
+sudo make packet-proof
 ```
 
-The integration test creates a temporary network namespace and veth pair, attaches the XDP program, sends ping traffic plus a crafted Ethernet/IPv4/UDP packet carrying an `EBAF` payload, and expects:
-
-```text
-integration crypto smoke passed
-```
-
-The benchmark smoke test sends `EBAF` UDP packets for a short fixed duration and prints a packets-per-second sample.
-
-The correctness test encrypts a known plaintext body, feeds the captured ciphertext through decrypt mode, and expects the original plaintext.
-
-## Live Cipher Dashboard
-
-Run a local server-to-client demo with real packets crossing a temporary veth pair:
+Physical NIC profile:
 
 ```bash
-sudo scripts/demo_live_cipher.py --duration 30
+sudo make physical-profile IFACE=wlan0
+cat experiments/physical-profile-wlan0.json
 ```
 
-Open:
+Physical TC send-only demo:
 
-```text
-http://127.0.0.1:8088
+```bash
+sudo make physical-tc-demo IFACE=wlan0 PEER_IP=$(ip route | awk '/default/ {print $3; exit}')
+cat experiments/physical-tc-demo-wlan0.json
 ```
 
-The dashboard shows a Wireshark-style packet timeline, plaintext ASCII, plaintext hex, ciphertext hex, live counters, and throughput graphs. It cleans up the namespace and detaches XDP when stopped.
+## Dashboard
+
+The dashboard starts a temporary veth pair and network namespace.
+
+Default mode:
+
+- TC encrypt on host egress
+- TC decrypt on namespace ingress
+- `ffmpeg` generates MPEG-TS UDP media
+- namespace UDP receiver counts decrypted packets
+- browser reads `/api/snapshot`, `/api/artifacts`, and `/api/capabilities`
 
 Smoke test:
 
@@ -96,22 +133,64 @@ Smoke test:
 sudo make demo-smoke
 ```
 
-## Packet Format
+## Packet Formats
 
-The XDP program processes IPv4/UDP packets whose destination port matches `--port`. UDP payload starts with:
+### Framed XDP/TC Mode
+
+UDP payload begins with:
 
 - magic: `EBAF`
 - version: `1`
 - action: `1` encrypt or `2` decrypt
 - payload length: big-endian 16-bit value
 - IV: 16 bytes
-- body: cipher text/plaintext bytes; AES-CBC bodies must be 16-byte aligned
+- body: plaintext or ciphertext
 
-Supported crypto modes:
+AES-CBC bodies must be 16-byte aligned.
+
+### TC Transparent Mode
+
+Application sends normal UDP payload.
+
+Encrypt path:
+
+1. pad payload to AES-CBC block size
+2. encrypt payload in place
+3. append eBaF tail metadata with IV and body length
+4. repair packet length fields
+
+Decrypt path:
+
+1. read tail metadata
+2. decrypt body in place
+3. remove padding and metadata
+4. deliver plaintext UDP payload to the receiver
+
+## Crypto Modes
 
 - `cbc-aes`: kernel `cbc(aes)`, AES-128-CBC
-- `chacha20`: kernel `chacha20`, 256-bit key stream cipher without Poly1305 authentication
+- `chacha20`: kernel `chacha20`, 256-bit stream cipher, framed path only
+
+`chacha20poly1305` is not exposed through this tested BPF crypto path. Authenticated encryption remains future work.
+
+## Evidence Artifacts
+
+Generated files:
+
+- `experiments/latest.json`
+- `experiments/latest.csv`
+- `experiments/packet-proof.json`
+- `experiments/physical-profile-<iface>.json`
+- `experiments/physical-tc-demo-<iface>.json`
+
+Typical green signals:
+
+```text
+tc transparent udp crypto passed
+ciphertext_differs=True
+decrypt_matches=True
+```
 
 ## Safety
 
-Run first inside a network namespace or lab host. XDP programs can drop or modify live traffic.
+Run this first inside a network namespace or lab host. XDP and TC programs can modify live traffic. Physical NIC results depend on driver support, offloads, DMA path, IRQ behavior, and whether native XDP is available.
