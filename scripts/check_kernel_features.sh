@@ -22,14 +22,19 @@ pass 'bpftool available'
 command -v ip >/dev/null 2>&1 || fail 'iproute2 ip command not found'
 pass 'ip command available'
 
-if bpftool btf dump file /sys/kernel/btf/vmlinux format raw | grep -q 'bpf_crypto_encrypt'; then
-	pass 'bpf_crypto_encrypt kfunc visible in BTF'
-else
-	fail 'bpf_crypto_encrypt kfunc not visible in BTF; use a kernel with BPF crypto kfunc support'
-fi
-
-if bpftool btf dump file /sys/kernel/btf/vmlinux format raw | grep -q 'bpf_dynptr_from_xdp'; then
-	pass 'bpf_dynptr_from_xdp kfunc visible in BTF'
-else
-	fail 'bpf_dynptr_from_xdp kfunc not visible in BTF'
-fi
+for kfunc in \
+	bpf_crypto_ctx_create \
+	bpf_crypto_ctx_release \
+	bpf_crypto_encrypt \
+	bpf_crypto_decrypt \
+	bpf_dynptr_from_xdp \
+	bpf_dynptr_from_skb \
+	bpf_dynptr_adjust \
+	bpf_dynptr_clone
+do
+	if bpftool btf dump file /sys/kernel/btf/vmlinux format raw | grep -q "$kfunc"; then
+		pass "$kfunc kfunc visible in BTF"
+	else
+		fail "$kfunc kfunc not visible in BTF"
+	fi
+done

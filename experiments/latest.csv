@@ -1,0 +1,16 @@
+name,hook,mode,payload_bytes,samples,passed,pps_min,pps_median,pps_max,crypto_ok,malformed,duration_sec,cpu_count,kernel
+check,none,feature-gate,,1,True,,,,0,0,0.833,16,6.18.7-arch1-1
+correctness,xdp,encrypt-decrypt,,1,True,,,,0,0,4.213,16,6.18.7-arch1-1
+local_veth_tc_encrypt_decrypt,tc,encrypt-decrypt,16,1,True,,,,2,0,5.102,16,6.18.7-arch1-1
+local_veth_xdp_encrypt_64,xdp,encrypt,64,3,True,435766,438363,440447,4992851,0,21.25,16,6.18.7-arch1-1
+local_veth_tc_encrypt_64,tc,encrypt,64,3,True,449795,449913,456577,5183280,0,21.258,16,6.18.7-arch1-1
+local_veth_tc_encrypt_decrypt_64,tc,encrypt-decrypt,64,3,True,415726,427934,430426,12824888,0,27.87,16,6.18.7-arch1-1
+local_veth_xdp_encrypt_512,xdp,encrypt,512,3,True,432494,436784,578778,5676088,0,21.276,16,6.18.7-arch1-1
+local_veth_tc_encrypt_512,tc,encrypt,512,3,True,436198,453433,456960,5161642,0,21.243,16,6.18.7-arch1-1
+local_veth_tc_encrypt_decrypt_512,tc,encrypt-decrypt,512,3,True,448891,449911,450933,13598128,0,27.837,16,6.18.7-arch1-1
+local_veth_xdp_encrypt_1200,xdp,encrypt,1200,3,True,456426,576696,681100,6965256,0,21.281,16,6.18.7-arch1-1
+local_veth_tc_encrypt_1200,tc,encrypt,1200,3,True,427101,445035,473596,5282530,0,21.248,16,6.18.7-arch1-1
+local_veth_tc_encrypt_decrypt_1200,tc,encrypt-decrypt,1200,3,True,438326,442740,447969,13371296,0,27.843,16,6.18.7-arch1-1
+local_veth_xdp_encrypt_1408,xdp,encrypt,1408,3,True,443082,452608,453587,5130823,0,21.244,16,6.18.7-arch1-1
+local_veth_tc_encrypt_1408,tc,encrypt,1408,3,True,445373,455730,469442,5222315,0,21.233,16,6.18.7-arch1-1
+local_veth_tc_encrypt_decrypt_1408,tc,encrypt-decrypt,1408,3,True,443245,449490,470921,13750166,0,27.848,16,6.18.7-arch1-1

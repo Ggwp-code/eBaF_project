@@ -15,9 +15,13 @@
 #include "crypto_common.h"
 #include "crypto_ctx.bpf.skel.h"
 #include "event_format.h"
+#include "tc_crypto.bpf.skel.h"
+#include "tc_transparent.bpf.skel.h"
 #include "xdp_crypto.bpf.skel.h"
 
 static struct crypto_ctx_bpf *ctx_skel;
+static struct tc_crypto_bpf *tc_skel;
+static struct tc_transparent_bpf *tc_transparent_skel;
 static struct xdp_crypto_bpf *xdp_skel;
 
 struct ebaf_event_printer {
@@ -112,6 +116,35 @@ static int attach_xdp(int ifindex, int prog_fd, int *xdp_flags)
 	return err;
 }
 
+static int attach_tc(int ifindex, int prog_fd, enum bpf_tc_attach_point attach_point,
+		     struct ebaf_bpf_runtime *rt)
+{
+	LIBBPF_OPTS(bpf_tc_hook, hook,
+		    .ifindex = ifindex,
+		    .attach_point = attach_point);
+	LIBBPF_OPTS(bpf_tc_opts, opts, .prog_fd = prog_fd);
+	int err;
+	int hook_created = 0;
+
+	err = bpf_tc_hook_create(&hook);
+	if (err && err != -EEXIST)
+		return err;
+	if (!err)
+		hook_created = 1;
+
+	err = bpf_tc_attach(&hook, &opts);
+	if (err) {
+		if (hook_created)
+			bpf_tc_hook_destroy(&hook);
+		return err;
+	}
+
+	rt->tc_hook = hook;
+	rt->tc_opts = opts;
+	rt->tc_attached = 1;
+	return 0;
+}
+
 int ebaf_bpf_start(const struct ebaf_user_config *cfg, struct ebaf_bpf_runtime *rt)
 {
 	LIBBPF_OPTS(bpf_test_run_opts, test_opts);
@@ -161,6 +194,60 @@ int ebaf_bpf_start(const struct ebaf_user_config *cfg, struct ebaf_bpf_runtime *
 	if (err)
 		goto err_out;
 
+	if (cfg->hook == EBAF_HOOK_TC || cfg->hook == EBAF_HOOK_BOTH) {
+		if (cfg->crypto.flags & EBAF_CRYPTO_F_TRANSPARENT) {
+			tc_transparent_skel = tc_transparent_bpf__open();
+			if (!tc_transparent_skel) {
+				err = -errno;
+				goto err_out;
+			}
+
+			err = bpf_map__reuse_fd(tc_transparent_skel->maps.crypto_config, config_map_fd);
+			if (err)
+				goto err_out;
+			err = bpf_map__reuse_fd(tc_transparent_skel->maps.crypto_ctx_map, ctx_map_fd);
+			if (err)
+				goto err_out;
+			err = bpf_map__reuse_fd(tc_transparent_skel->maps.crypto_stats,
+						bpf_map__fd(xdp_skel->maps.crypto_stats));
+			if (err)
+				goto err_out;
+			err = bpf_map__reuse_fd(tc_transparent_skel->maps.crypto_events,
+						bpf_map__fd(xdp_skel->maps.crypto_events));
+			if (err)
+				goto err_out;
+
+			err = tc_transparent_bpf__load(tc_transparent_skel);
+			if (err)
+				goto err_out;
+		} else {
+			tc_skel = tc_crypto_bpf__open();
+			if (!tc_skel) {
+				err = -errno;
+				goto err_out;
+			}
+
+			err = bpf_map__reuse_fd(tc_skel->maps.crypto_config, config_map_fd);
+			if (err)
+				goto err_out;
+			err = bpf_map__reuse_fd(tc_skel->maps.crypto_ctx_map, ctx_map_fd);
+			if (err)
+				goto err_out;
+			err = bpf_map__reuse_fd(tc_skel->maps.crypto_stats,
+						bpf_map__fd(xdp_skel->maps.crypto_stats));
+			if (err)
+				goto err_out;
+			err = bpf_map__reuse_fd(tc_skel->maps.crypto_events,
+						bpf_map__fd(xdp_skel->maps.crypto_events));
+			if (err)
+				goto err_out;
+
+			err = tc_crypto_bpf__load(tc_skel);
+			if (err)
+				goto err_out;
+		}
+	}
+
 	rt->config_map_fd = config_map_fd;
 	err = bpf_map_update_elem(rt->config_map_fd, &key, &cfg->crypto, BPF_ANY);
 	if (err) {
@@ -180,9 +267,33 @@ int ebaf_bpf_start(const struct ebaf_user_config *cfg, struct ebaf_bpf_runtime *
 	}
 
 	rt->xdp_prog_fd = bpf_program__fd(xdp_skel->progs.xdp_crypto);
-	err = attach_xdp(rt->ifindex, rt->xdp_prog_fd, &rt->xdp_flags);
-	if (err)
-		goto err_out;
+	if (cfg->hook == EBAF_HOOK_XDP || cfg->hook == EBAF_HOOK_BOTH) {
+		err = attach_xdp(rt->ifindex, rt->xdp_prog_fd, &rt->xdp_flags);
+		if (err)
+			goto err_out;
+	}
+
+	if (cfg->hook == EBAF_HOOK_TC || cfg->hook == EBAF_HOOK_BOTH) {
+		enum bpf_tc_attach_point attach_point = BPF_TC_EGRESS;
+
+		if (cfg->crypto.action == EBAF_ACTION_DECRYPT)
+			attach_point = BPF_TC_INGRESS;
+		if (cfg->tc_attach == EBAF_TC_ATTACH_INGRESS)
+			attach_point = BPF_TC_INGRESS;
+		else if (cfg->tc_attach == EBAF_TC_ATTACH_EGRESS)
+			attach_point = BPF_TC_EGRESS;
+
+		if (cfg->crypto.flags & EBAF_CRYPTO_F_TRANSPARENT)
+			err = attach_tc(rt->ifindex,
+					bpf_program__fd(tc_transparent_skel->progs.tc_transparent),
+					attach_point, rt);
+		else
+			err = attach_tc(rt->ifindex,
+					bpf_program__fd(tc_skel->progs.tc_crypto),
+					attach_point, rt);
+		if (err)
+			goto err_out;
+	}
 
 	rt->stats_map_fd = bpf_map__fd(xdp_skel->maps.crypto_stats);
 	event_printer.jsonl = cfg->output_jsonl;
@@ -206,11 +317,20 @@ void ebaf_bpf_stop(const struct ebaf_user_config *cfg, struct ebaf_bpf_runtime *
 	if (rt && rt->ifindex > 0 && rt->xdp_flags)
 		bpf_xdp_detach(rt->ifindex, rt->xdp_flags, NULL);
 
+	if (rt && rt->tc_attached) {
+		bpf_tc_detach(&rt->tc_hook, &rt->tc_opts);
+		bpf_tc_hook_destroy(&rt->tc_hook);
+	}
+
 	if (rt && rt->event_ring)
 		ring_buffer__free(rt->event_ring);
 
+	tc_crypto_bpf__destroy(tc_skel);
+	tc_transparent_bpf__destroy(tc_transparent_skel);
 	xdp_crypto_bpf__destroy(xdp_skel);
 	crypto_ctx_bpf__destroy(ctx_skel);
+	tc_skel = NULL;
+	tc_transparent_skel = NULL;
 	xdp_skel = NULL;
 	ctx_skel = NULL;
 
@@ -221,6 +341,9 @@ void ebaf_bpf_stop(const struct ebaf_user_config *cfg, struct ebaf_bpf_runtime *
 		rt->stats_map_fd = -1;
 		rt->config_map_fd = -1;
 		rt->event_ring = NULL;
+		memset(&rt->tc_hook, 0, sizeof(rt->tc_hook));
+		memset(&rt->tc_opts, 0, sizeof(rt->tc_opts));
+		rt->tc_attached = 0;
 	}
 }
 

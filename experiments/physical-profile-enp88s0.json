@@ -1,0 +1,32 @@
+{
+  "created_at": 1779996867.9903316,
+  "interface": "enp88s0",
+  "link": {
+    "ifindex": 2,
+    "ifname": "enp88s0",
+    "mtu": 1500,
+    "operstate": "DOWN",
+    "link_type": "ether",
+    "address": "84:a9:38:c1:4c:f1"
+  },
+  "driver": {},
+  "offloads": {},
+  "queues": 2,
+  "irq_lines_matching_interface": 1,
+  "xdp": {
+    "current_bpftool_net": "xdp:\n\ntc:\n\nflow_dissector:\n\nnetfilter:",
+    "native": {
+      "supported": false,
+      "error": "Error: Underlying driver does not support XDP in native mode."
+    },
+    "generic": {
+      "supported": true,
+      "error": ""
+    }
+  },
+  "notes": [
+    "No traffic was generated.",
+    "Native probe uses temporary xdpdrv attach and immediate detach.",
+    "Generic probe uses temporary xdpgeneric attach and immediate detach."
+  ]
+}

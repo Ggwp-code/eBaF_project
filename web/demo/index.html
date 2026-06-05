@@ -3,33 +3,64 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>eBaF capture - Live Cipher</title>
+  <title>eBaF capture - TC UDP Media</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <div class="window">
     <div class="toolbar">
-      <button title="Start capture">◢</button>
-      <button id="stop" title="Stop demo">■</button>
-      <button id="reset" title="Reset view">↻</button>
-      <button title="Open">▣</button>
-      <button title="Save">▤</button>
+      <button id="start" title="Resume live refresh">run</button>
+      <button id="stop" title="Stop capture">stop</button>
+      <button id="reset" title="Reset view">clear</button>
+      <button id="openSnapshot" title="Open JSON snapshot">json</button>
+      <button id="saveSnapshot" title="Save JSON snapshot">export</button>
+      <button id="reportToggle" title="Show experiment report">report</button>
       <span class="sep"></span>
-      <button title="Find">⌕</button>
-      <button title="Back">←</button>
-      <button title="Forward">→</button>
-      <button title="Zoom in">⊕</button>
-      <button title="Zoom out">⊖</button>
-      <span class="statusline" id="status">connecting...</span>
+      <button id="find" title="Focus display filter">filter</button>
+      <button id="prevPacket" title="Previous packet">prev</button>
+      <button id="nextPacket" title="Next packet">next</button>
+      <button id="zoomIn" title="Zoom in">zoom in</button>
+      <button id="zoomOut" title="Zoom out">zoom out</button>
+      <span class="statusline" id="status">status pending</span>
     </div>
 
     <div class="filterbar">
-      <button class="bookmark">▶</button>
-      <input value="udp.port == 7777 && ebaf.crypto" aria-label="display filter">
-      <button class="apply">➜</button>
-      <button class="expr">Expression...</button>
-      <button class="plus">+</button>
+      <button id="pause" class="bookmark" title="Pause live refresh">pause</button>
+      <input id="filterInput" value="udp.port == 7777 && ebaf.crypto" aria-label="display filter">
+      <button id="applyFilter" class="apply" title="Apply display filter">apply</button>
+      <button id="expression" class="expr" title="Filter expressions">expression</button>
+      <button id="clearFilter" class="plus" title="Clear filter">clear</button>
+      <div id="exprMenu" class="expr-menu hidden">
+        <button data-filter="">loading backend filters...</button>
+      </div>
     </div>
+
+    <section class="summary-panes">
+      <div class="summary-pane">
+        <div class="pane-title">Capture</div>
+        <div id="captureSummary" class="pane-value">waiting for backend</div>
+      </div>
+      <div class="summary-pane">
+        <div class="pane-title">Crypto Proof</div>
+        <div id="proofSummary" class="pane-value">waiting for packet-proof.json</div>
+      </div>
+      <div class="summary-pane">
+        <div class="pane-title">TC UDP Benchmark</div>
+        <div id="benchmarkSummary" class="pane-value">waiting for latest.csv</div>
+      </div>
+      <div class="summary-pane">
+        <div class="pane-title">Physical TC Media</div>
+        <div id="physicalSummary" class="pane-value">waiting for physical-tc-demo</div>
+      </div>
+    </section>
+
+    <section id="reportPanel" class="report-panel hidden">
+      <div class="report-head">
+        <strong>eBaF TC UDP Media Report</strong>
+        <button id="reportClose" title="Close report">close</button>
+      </div>
+      <div id="reportBody" class="report-body"></div>
+    </section>
 
     <section class="packet-list">
       <table>
@@ -44,11 +75,11 @@
     </section>
 
     <section class="details" id="details">
-      <div class="tree-row">▸ Frame: waiting for packets</div>
-      <div class="tree-row">▸ Ethernet II</div>
-      <div class="tree-row">▸ Internet Protocol Version 4</div>
-      <div class="tree-row">▸ User Datagram Protocol</div>
-      <div class="tree-row">▸ eBaF Crypto</div>
+      <div class="tree-row">Frame: waiting for packets</div>
+      <div class="tree-row">Ethernet II</div>
+      <div class="tree-row">Internet Protocol Version 4</div>
+      <div class="tree-row">User Datagram Protocol</div>
+      <div class="tree-row">eBaF Crypto</div>
     </section>
 
     <section class="bytes">
@@ -57,12 +88,10 @@
     </section>
 
     <footer>
-      <span class="dot"></span>
-      <span id="ident">Live eBPF/XDP cipher capture</span>
       <span class="grow"></span>
-      <span id="counts">Packets: 0 · Displayed: 0 (100.0%) · Load time: live · Profile: Default</span>
+      <span id="counts">Packets: 0 | Displayed: 0 (100.0%) | Load time: live | Profile: Default</span>
     </footer>
   </div>
-  <script src="/app.js"></script>
+  <script type="module" src="/app.js"></script>
 </body>
 </html>

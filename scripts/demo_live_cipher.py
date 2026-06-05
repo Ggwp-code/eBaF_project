@@ -1,22 +1,27 @@
 #!/usr/bin/env python3
 import argparse
+import csv
 import http.server
 import json
 import os
+import random
 import signal
+import shutil
 import socket
 import struct
 import subprocess
 import threading
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB_DIR = ROOT / "web" / "demo"
+EXPERIMENT_CSV = ROOT / "experiments" / "latest.csv"
+PACKET_PROOF = ROOT / "experiments" / "packet-proof.json"
+EXPERIMENTS_DIR = ROOT / "experiments"
 KEY = "000102030405060708090a0b0c0d0e0f"
 UDP_PORT = 7777
-ETH_P_IP = 0x0800
-IPPROTO_UDP = 17
 
 
 def run(cmd, **kwargs):
@@ -32,17 +37,42 @@ def checksum(data):
     return (~total) & 0xFFFF
 
 
-def ascii_preview(data):
-    return "".join(chr(b) if 32 <= b <= 126 else "." for b in data)
-
-
 def hex_preview(data, limit=96):
     return " ".join(f"{b:02x}" for b in data[:limit])
 
 
+def spaced_hex(hex_text, limit=96):
+    compact = "".join(str(hex_text or "").split())[:limit * 2]
+    return " ".join(compact[i:i + 2] for i in range(0, len(compact), 2))
+
+
+def ascii_from_hex(hex_text):
+    compact = "".join(str(hex_text or "").split())
+    chars = []
+    for i in range(0, len(compact), 2):
+        try:
+            b = int(compact[i:i + 2], 16)
+        except ValueError:
+            break
+        chars.append(chr(b) if 32 <= b <= 126 else ".")
+    return "".join(chars)
+
+
+def load_json_files(pattern):
+    items = []
+    for path in sorted(EXPERIMENTS_DIR.glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        data["_file"] = str(path.relative_to(ROOT))
+        items.append(data)
+    return items
+
+
 def make_payload(body, seq):
-	iv = bytes(((seq + i) & 0xFF) for i in range(16))
-	return b"EBAF" + bytes([1, 1]) + len(body).to_bytes(2, "big") + iv + body
+    iv = bytes(((seq + i) & 0xFF) for i in range(16))
+    return b"EBAF" + bytes([1, 1]) + len(body).to_bytes(2, "big") + iv + body
 
 
 class DemoState:
@@ -58,15 +88,17 @@ class DemoState:
         self.crypto_ok_rate = 0
         self.packets = []
         self.samples = []
-        self.pending_plain = []
+        self.sent_by_seq = {}
         self.sender_count = 0
-        self.capture_count = 0
+        self.event_count = 0
         self.server_count = 0
         self.app_lines = []
         self.status = "starting"
         self.error = ""
         self.iface = ""
         self.app_pid = None
+        self.traffic_source = ""
+        self.media_file = ""
 
     def snapshot(self):
         with self.lock:
@@ -84,18 +116,63 @@ class DemoState:
                 "packets": list(self.packets),
                 "samples": list(self.samples),
                 "sender_count": self.sender_count,
-                "capture_count": self.capture_count,
+                "capture_count": self.event_count,
+                "event_count": self.event_count,
                 "server_count": self.server_count,
                 "app_pid": self.app_pid,
+                "traffic_source": self.traffic_source,
+                "media_file": self.media_file,
                 "app_lines": list(self.app_lines[-12:]),
             }
 
-    def update_stats_from_line(self, line):
+    def capabilities(self):
         with self.lock:
-            self.app_lines.append(line.strip())
+            return {
+                "iface": self.iface,
+                "port": UDP_PORT,
+                "mode": "tc-transparent",
+                "algo": "cbc-aes",
+                "endpoints": ["/api/snapshot", "/api/events", "/api/capabilities", "/api/stop"],
+                "filters": [
+                    {"label": "UDP/EBAF", "value": "udp.port == 7777 && ebaf.crypto"},
+                    {"label": "Encrypt", "value": "action == encrypt"},
+                    {"label": "Client source", "value": "ip.src == 10.66.0.1"},
+                    {"label": "Peer destination", "value": "ip.dst == 10.66.0.2"},
+                    {"label": "CBC AES", "value": "algo == cbc-aes"},
+                    {"label": "All packets", "value": ""},
+                ],
+            }
+
+    def artifacts(self):
+        rows = []
+        proof = {}
+        if EXPERIMENT_CSV.exists():
+            with EXPERIMENT_CSV.open(newline="", encoding="utf-8") as f:
+                rows = list(csv.DictReader(f))
+        if PACKET_PROOF.exists():
+            proof = json.loads(PACKET_PROOF.read_text(encoding="utf-8"))
+        return {
+            "experiments": rows,
+            "packet_proof": proof,
+            "physical_profiles": load_json_files("physical-profile-*.json"),
+            "physical_tc_demos": load_json_files("physical-tc-demo-*.json"),
+        }
+
+    def update_stats_from_line(self, line):
+        stripped = line.strip()
+        if stripped.startswith("{"):
+            try:
+                event = json.loads(stripped)
+            except json.JSONDecodeError:
+                event = {}
+            if event.get("type") == "packet":
+                self.add_event(event)
+                return
+        with self.lock:
+            self.app_lines.append(stripped)
             self.app_lines = self.app_lines[-40:]
         parts = {}
-        for token in line.strip().split():
+        for token in stripped.split():
             if "=" not in token:
                 continue
             key, value = token.split("=", 1)
@@ -120,26 +197,45 @@ class DemoState:
                 self.samples.insert(0, packet)
                 self.samples = self.samples[:8]
 
-    def queue_plain(self, packet):
+    def add_event(self, event):
+        sample = event.get("sample", "")
+        metadata = {}
         with self.lock:
-            self.pending_plain.append(packet)
-            self.pending_plain = self.pending_plain[-256:]
-            self.sender_count += 1
-
-    def pair_cipher(self, cipher_hex, length):
-        with self.lock:
-            plain = self.pending_plain.pop(0) if self.pending_plain else {}
-            self.capture_count += 1
-        return {
+            seq = self.event_count
+            metadata = dict(self.sent_by_seq.get(seq, {}))
+        packet = {
             "time": time.strftime("%H:%M:%S"),
-            "seq": plain.get("seq"),
-            "kind": plain.get("kind", "payload"),
-            "plain_ascii": plain.get("plain_ascii", ""),
-            "plain_hex": plain.get("plain_hex", ""),
-            "cipher_hex": cipher_hex,
-            "length": length,
-            "state": "xdp_encrypt",
+            "seq": seq,
+            "kind": "tc",
+            "src": event.get("src", "10.66.0.1"),
+            "dst": event.get("dst", "10.66.0.2"),
+            "src_port": event.get("src_port", 0),
+            "dst_port": event.get("dst_port", UDP_PORT),
+            "action": event.get("action", "encrypt"),
+            "algo": event.get("algo", "cbc-aes"),
+            "plain_ascii": metadata.get("summary", self._fallback_summary(event)),
+            "plain_hex": "",
+            "cipher_hex": spaced_hex(sample),
+            "cipher_ascii": ascii_from_hex(sample),
+            "length": event.get("data_len", 0),
+            "payload_len": event.get("payload_len", 0),
+            "ts_ns": event.get("ts_ns", 0),
+            "state": "xdp_event",
+            "app": metadata.get("app", ""),
+            "method": metadata.get("method", ""),
+            "path": metadata.get("path", ""),
+            "trace_id": metadata.get("trace_id", ""),
         }
+        with self.lock:
+            self.event_count += 1
+        self.add_packet(packet)
+
+    def _fallback_summary(self, event):
+        action = event.get("action", "encrypt")
+        payload_len = event.get("payload_len", 0)
+        data_len = event.get("data_len", 0)
+        source = self.traffic_source or "media"
+        return f"{source} UDP {action} payload={payload_len}B cipher_body={data_len}B"
 
 
 class Demo:
@@ -150,8 +246,13 @@ class Demo:
         self.host_if = f"ebafdh{os.getpid()}"
         self.ns_if = f"ebafdp{os.getpid()}"
         self.app = None
+        self.decrypt_app = None
+        self.sender_proc = None
+        self.receiver_proc = None
         self.host_mac = b""
         self.ns_mac = b""
+        self.state.traffic_source = args.traffic
+        self.state.media_file = str(args.media_file or "")
 
     def setup(self):
         if os.geteuid() != 0:
@@ -172,26 +273,41 @@ class Demo:
         self.state.iface = self.host_if
 
     def start_crypto(self):
-        cmd = [str(ROOT / "build" / "ebaf-crypto"), "--iface", self.host_if, "--mode", "encrypt",
-               "--key", KEY, "--port", str(UDP_PORT), "--stats-interval", "1"]
+        bin_path = str(ROOT / "build" / "ebaf-crypto")
+        cmd = [bin_path, "--iface", self.host_if, "--mode", "encrypt",
+               "--hook", "tc", "--transparent", "--key", KEY, "--port", str(UDP_PORT),
+               "--stats-interval", "1", "--jsonl"]
+        dec_cmd = ["ip", "netns", "exec", self.ns, bin_path, "--iface", self.ns_if,
+                   "--mode", "decrypt", "--hook", "tc", "--transparent", "--key", KEY,
+                   "--port", str(UDP_PORT), "--stats-interval", "1", "--jsonl"]
         self.app = subprocess.Popen(cmd, cwd=ROOT, text=True, stdout=subprocess.PIPE,
                                     stderr=subprocess.STDOUT)
+        self.decrypt_app = subprocess.Popen(dec_cmd, cwd=ROOT, text=True, stdout=subprocess.PIPE,
+                                            stderr=subprocess.STDOUT)
         self.state.app_pid = self.app.pid
-        threading.Thread(target=self._read_app, daemon=True).start()
+        threading.Thread(target=self._read_app, args=(self.app, "encrypt"), daemon=True).start()
+        threading.Thread(target=self._read_app, args=(self.decrypt_app, "decrypt"), daemon=True).start()
         time.sleep(2)
         if self.app.poll() is not None:
-            raise RuntimeError("ebaf-crypto exited before demo started")
+            raise RuntimeError("encrypt ebaf-crypto exited before demo started")
+        if self.decrypt_app.poll() is not None:
+            raise RuntimeError("decrypt ebaf-crypto exited before demo started")
 
-    def _read_app(self):
-        assert self.app and self.app.stdout
-        for line in self.app.stdout:
-            self.state.update_stats_from_line(line)
+    def _read_app(self, proc, label):
+        assert proc and proc.stdout
+        for line in proc.stdout:
+            if line.lstrip().startswith("{"):
+                self.state.update_stats_from_line(line)
+            else:
+                self.state.update_stats_from_line(f"{label}: {line}")
 
     def start_threads(self):
         self.state.status = "running"
-        threading.Thread(target=self._server_loop, daemon=True).start()
-        threading.Thread(target=self._tap_loop, daemon=True).start()
-        threading.Thread(target=self._send_loop, daemon=True).start()
+        self._start_receiver()
+        if self.args.traffic == "synthetic":
+            threading.Thread(target=self._send_loop, daemon=True).start()
+        else:
+            self._start_ffmpeg()
         if self.args.duration:
             threading.Thread(target=self._duration_loop, daemon=True).start()
 
@@ -199,42 +315,126 @@ class Demo:
         time.sleep(self.args.duration)
         self.state.stop.set()
 
+    def _start_receiver(self):
+        receiver = (
+            "import socket,sys;"
+            "port=int(sys.argv[1]);"
+            "sock=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);"
+            "sock.bind(('10.66.0.2',port));"
+            "sock.settimeout(1.0);"
+            "count=0;"
+            "\nwhile True:\n"
+            "    try:\n"
+            "        data,_=sock.recvfrom(65535)\n"
+            "    except socket.timeout:\n"
+            "        continue\n"
+            "    count += 1\n"
+            "    print(f'received={count} bytes={len(data)}', flush=True)\n"
+        )
+        self.receiver_proc = subprocess.Popen(
+            ["ip", "netns", "exec", self.ns, "python3", "-u", "-c", receiver, str(UDP_PORT)],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        threading.Thread(target=self._read_receiver, daemon=True).start()
+        time.sleep(0.2)
+        if self.receiver_proc.poll() is not None:
+            raise RuntimeError("UDP media receiver exited before demo started")
+
+    def _read_receiver(self):
+        assert self.receiver_proc and self.receiver_proc.stdout
+        for line in self.receiver_proc.stdout:
+            with self.state.lock:
+                self.state.app_lines.append(f"receiver: {line.strip()}")
+                self.state.app_lines = self.state.app_lines[-40:]
+                if line.startswith("received="):
+                    self.state.server_count += 1
+
+    def _start_ffmpeg(self):
+        if not shutil.which("ffmpeg"):
+            raise RuntimeError("ffmpeg missing; install ffmpeg or use --traffic synthetic")
+        media = Path(self.args.media_file).expanduser() if self.args.media_file else None
+        if media:
+            if not media.exists():
+                raise RuntimeError(f"media file not found: {media}")
+            input_args = ["-stream_loop", "-1", "-re", "-i", str(media)]
+            self.state.traffic_source = "ffmpeg-file"
+            self.state.media_file = str(media)
+        else:
+            input_args = ["-re", "-f", "lavfi", "-i",
+                          f"testsrc2=size={self.args.ffmpeg_size}:rate={self.args.ffmpeg_fps}"]
+            self.state.traffic_source = "ffmpeg-testsrc"
+        cmd = [
+            "ffmpeg", "-hide_banner", "-loglevel", "warning", *input_args,
+            "-an", "-c:v", "mpeg2video", "-b:v", self.args.ffmpeg_bitrate,
+            "-f", "mpegts", f"udp://10.66.0.2:{UDP_PORT}?pkt_size=1316",
+        ]
+        self.sender_proc = subprocess.Popen(cmd, cwd=ROOT, text=True, stdout=subprocess.PIPE,
+                                            stderr=subprocess.STDOUT)
+        threading.Thread(target=self._read_sender, daemon=True).start()
+
+    def _read_sender(self):
+        assert self.sender_proc and self.sender_proc.stdout
+        for line in self.sender_proc.stdout:
+            with self.state.lock:
+                self.state.app_lines.append(f"ffmpeg: {line.strip()}")
+                self.state.app_lines = self.state.app_lines[-40:]
+
     def _send_loop(self):
         seq = 0
         sender = (
             "import socket,sys,time;"
             "dst=sys.argv[1];port=int(sys.argv[2]);payloads=sys.argv[3:];"
-            "s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);"
-            "s.setsockopt(socket.SOL_SOCKET, 11, 1);"
-            "[(s.sendto(bytes.fromhex(p),(dst,port)), time.sleep(0.05)) for p in payloads];"
-            "s.close()"
+            "base=int(sys.argv[3]);payloads=sys.argv[4:];"
+            "socks=[];"
+            "[socks.append(socket.socket(socket.AF_INET,socket.SOCK_DGRAM)) for _ in range(4)];"
+            "[s.setsockopt(socket.SOL_SOCKET, 11, 1) for s in socks];"
+            "[(socks[(base+i)%len(socks)].sendto(bytes.fromhex(p),(dst,port)), time.sleep(0.018 + ((base+i)%7)*0.006)) for i,p in enumerate(payloads)];"
+            "[s.close() for s in socks]"
         )
         messages = [
-            ("login", "POST /login user=miku role=admin token=demo"),
-            ("metrics", "GET /metrics cpu=07 mem=42 xdp=active"),
-            ("chat", "MSG client says hello from live cipher demo"),
-            ("order", "PAY order=1042 amount=19.99 currency=USD"),
-            ("health", "PING service=edge-gateway status=green"),
-            ("search", "GET /api/search?q=ebpf+xdp+crypto"),
+            ("auth", "POST", "/login", "user=miku role=admin token=demo"),
+            ("metrics", "GET", "/metrics", "cpu=07 mem=42 xdp=active"),
+            ("chat", "MSG", "/room/main", "client says hello from live cipher demo"),
+            ("billing", "PAY", "/orders/1042", "amount=19.99 currency=USD"),
+            ("health", "PING", "/health", "service=edge-gateway status=green"),
+            ("search", "GET", "/api/search", "q=ebpf+xdp+crypto"),
+            ("video", "RTP", "/stream/camera-a", "frame=delta quality=720p"),
+            ("dns", "QUERY", "/resolve", "name=demo.internal type=A"),
         ]
+        random.seed(os.getpid())
         while not self.state.stop.is_set():
             payloads = []
             for _ in range(16):
-                kind, template = messages[seq % len(messages)]
-                text = f"{template} seq={seq:06d}"
-                body = text.encode("ascii")[:64].ljust(64, b" ")
-                payloads.append(make_payload(body, seq).hex())
-                self.state.queue_plain({
-                    "time": time.strftime("%H:%M:%S"),
-                    "seq": seq,
-                    "kind": kind,
-                    "plain_ascii": ascii_preview(body),
-                    "plain_hex": hex_preview(body),
-                    "length": len(body),
-                })
+                app, method, path, detail = messages[seq % len(messages)]
+                trace_id = f"{seq:06x}{random.randrange(0, 0xffff):04x}"
+                extra = " ".join(f"k{i}={random.randrange(10, 9999)}" for i in range(seq % 5))
+                text = f"{method} {path} app={app} trace={trace_id} {detail} {extra} seq={seq:06d}".strip()
+                size = [31, 47, 63, 79, 111, 143, 191, 239][seq % 8]
+                body = text.encode("ascii")
+                if len(body) < size:
+                    body = body + b" " + bytes(
+                        65 + ((seq + i) % 26) for i in range(size - len(body) - 1)
+                    )
+                body = body[:size]
+                pad_len = (-len(body)) % 16
+                if pad_len == 0:
+                    pad_len = 16
+                padded_len = len(body) + pad_len
+                payloads.append(body.hex())
+                with self.state.lock:
+                    self.state.sender_count += 1
+                    self.state.sent_by_seq[seq] = {
+                        "app": app,
+                        "method": method,
+                        "path": path,
+                        "trace_id": trace_id,
+                        "summary": f"{method} {path} app={app} body={len(body)}B padded={padded_len}B trace={trace_id}",
+                    }
+                    if len(self.state.sent_by_seq) > 512:
+                        for old_seq in list(self.state.sent_by_seq)[:128]:
+                            self.state.sent_by_seq.pop(old_seq, None)
                 seq += 1
-            subprocess.run(["ip", "netns", "exec", self.ns, "python3", "-c", sender,
-                            "10.66.0.1", str(UDP_PORT), *payloads],
+            subprocess.run(["python3", "-c", sender,
+                            "10.66.0.2", str(UDP_PORT), str(seq - len(payloads)), *payloads],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def _server_loop(self):
@@ -252,51 +452,23 @@ class Demo:
                     self.state.server_count += 1
         sock.close()
 
-    def _tap_loop(self):
-        sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_IP))
-        sock.bind((self.host_if, 0))
-        sock.settimeout(0.5)
-        while not self.state.stop.is_set():
-            try:
-                packet = sock.recv(65535)
-            except socket.timeout:
-                continue
-            payload = self._packet_payload(packet)
-            if payload:
-                parsed = self._parse_payload(payload)
-                if parsed:
-                    self.state.add_packet(parsed)
-        sock.close()
-
-    def _packet_payload(self, packet):
-        if len(packet) < 14 + 20 + 8 + 24 or packet[12:14] != b"\x08\x00":
-            return None
-        if packet[23] != IPPROTO_UDP:
-            return None
-        ihl = (packet[14] & 0x0F) * 4
-        udp_off = 14 + ihl
-        if len(packet) < udp_off + 8:
-            return None
-        if struct.unpack("!H", packet[udp_off + 2:udp_off + 4])[0] != UDP_PORT:
-            return None
-        return packet[udp_off + 8:]
-
     def _parse_payload(self, payload):
         if len(payload) < 24 or payload[:4] != b"EBAF":
             return None
         body_len = struct.unpack("!H", payload[6:8])[0]
         body = payload[24:24 + body_len]
-        return self.state.pair_cipher(hex_preview(body), len(body))
+        return {"cipher_hex": hex_preview(body), "length": len(body)}
 
     def cleanup(self):
         self.state.stop.set()
         self.state.status = "stopping"
-        if self.app and self.app.poll() is None:
-            self.app.terminate()
-            try:
-                self.app.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                self.app.kill()
+        for proc in (self.sender_proc, self.receiver_proc, self.app, self.decrypt_app):
+            if proc and proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
         subprocess.run(["ip", "netns", "del", self.ns], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         subprocess.run(["ip", "link", "del", self.host_if], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.state.status = "stopped"
@@ -305,9 +477,14 @@ class Demo:
 def make_handler(demo):
     class Handler(http.server.SimpleHTTPRequestHandler):
         def translate_path(self, path):
-            if path == "/":
+            clean_path = urlparse(path).path
+            if clean_path == "/":
                 return str(WEB_DIR / "index.html")
-            return str(WEB_DIR / path.lstrip("/"))
+            return str(WEB_DIR / clean_path.lstrip("/"))
+
+        def end_headers(self):
+            self.send_header("Cache-Control", "no-store")
+            super().end_headers()
 
         def send_json(self, obj):
             data = json.dumps(obj).encode("utf-8")
@@ -321,6 +498,12 @@ def make_handler(demo):
         def do_GET(self):
             if self.path == "/api/snapshot" or self.path == "/api/events":
                 self.send_json(demo.state.snapshot())
+                return
+            if self.path == "/api/capabilities":
+                self.send_json(demo.state.capabilities())
+                return
+            if self.path == "/api/artifacts":
+                self.send_json(demo.state.artifacts())
                 return
             return super().do_GET()
 
@@ -338,10 +521,15 @@ def make_handler(demo):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Live eBPF/XDP cipher dashboard")
+    parser = argparse.ArgumentParser(description="Live eBPF TC transparent UDP media dashboard")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8088)
     parser.add_argument("--duration", type=int, default=0)
+    parser.add_argument("--traffic", choices=("ffmpeg", "synthetic"), default="ffmpeg")
+    parser.add_argument("--media-file", default="")
+    parser.add_argument("--ffmpeg-size", default="640x360")
+    parser.add_argument("--ffmpeg-fps", type=int, default=30)
+    parser.add_argument("--ffmpeg-bitrate", default="1M")
     args = parser.parse_args()
 
     demo = Demo(args)

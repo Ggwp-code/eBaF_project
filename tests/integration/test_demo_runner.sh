@@ -6,7 +6,7 @@ if [[ "${EUID}" -ne 0 ]]; then
 	exit 77
 fi
 
-for cmd in ip python3 timeout; do
+for cmd in ip python3 timeout ffmpeg; do
 	if ! command -v "${cmd}" >/dev/null 2>&1; then
 		echo "SKIP: ${cmd} missing"
 		exit 77
@@ -62,9 +62,9 @@ for _ in range(20):
         continue
     stats = last.get("stats", {})
     packets = last.get("packets", [])
-    has_ascii = any(p.get("plain_ascii") for p in packets)
     has_cipher = any(p.get("cipher_hex") for p in packets)
-    if stats.get("crypto_ok", 0) > 0 and packets and has_ascii and has_cipher:
+    event_count = last.get("event_count", last.get("capture_count", 0))
+    if stats.get("crypto_ok", 0) > 0 and event_count > 0 and packets and has_cipher:
         print("live dashboard smoke passed")
         raise SystemExit(0)
     time.sleep(1)

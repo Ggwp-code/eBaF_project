@@ -13,6 +13,18 @@ char LICENSE[] SEC("license") = "GPL";
 #define IPPROTO_UDP 17
 #endif
 
+#ifndef TC_ACT_OK
+#define TC_ACT_OK 0
+#endif
+
+#ifndef IP_MF
+#define IP_MF 0x2000
+#endif
+
+#ifndef IP_OFFSET
+#define IP_OFFSET 0x1fff
+#endif
+
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
 	__uint(max_entries, 1);
@@ -39,9 +51,12 @@ struct {
 	__uint(max_entries, 1 << 20);
 } crypto_events SEC(".maps");
 
-extern int bpf_dynptr_from_xdp(struct xdp_md *xdp, __u64 flags, struct bpf_dynptr *ptr__uninit) __ksym;
-extern int bpf_dynptr_adjust(const struct bpf_dynptr *ptr, __u32 start, __u32 end) __ksym;
-extern int bpf_dynptr_clone(const struct bpf_dynptr *ptr, struct bpf_dynptr *clone__uninit) __ksym;
+extern int bpf_dynptr_from_skb(struct __sk_buff *skb, __u64 flags,
+			       struct bpf_dynptr *ptr__uninit) __ksym;
+extern int bpf_dynptr_adjust(const struct bpf_dynptr *ptr, __u32 start,
+			     __u32 end) __ksym;
+extern int bpf_dynptr_clone(const struct bpf_dynptr *ptr,
+			    struct bpf_dynptr *clone__uninit) __ksym;
 extern int bpf_crypto_encrypt(struct bpf_crypto_ctx *ctx,
 			      const struct bpf_dynptr *src,
 			      const struct bpf_dynptr *dst,
@@ -68,7 +83,8 @@ static __always_inline void stat_reason(struct ebaf_crypto_stats *stats, __u64 *
 static __always_inline void emit_crypto_event(struct iphdr *ip, struct udphdr *udp,
 					      struct ebaf_crypto_header *hdr,
 					      __u32 payload_len, __u32 data_len,
-					      void *data_end, const struct ebaf_crypto_config *config)
+					      void *data_end,
+					      const struct ebaf_crypto_config *config)
 {
 	struct ebaf_crypto_event *event;
 	void *sample_base = (void *)(hdr + 1);
@@ -102,11 +118,11 @@ static __always_inline void emit_crypto_event(struct iphdr *ip, struct udphdr *u
 	bpf_ringbuf_submit(event, 0);
 }
 
-SEC("xdp")
-int xdp_crypto(struct xdp_md *ctx)
+SEC("tc")
+int tc_crypto(struct __sk_buff *skb)
 {
-	void *data = (void *)(long)ctx->data;
-	void *data_end = (void *)(long)ctx->data_end;
+	void *data = (void *)(long)skb->data;
+	void *data_end = (void *)(long)skb->data_end;
 	struct ebaf_crypto_header *hdr;
 	struct ebaf_crypto_ctx_slot *slot;
 	struct bpf_crypto_ctx *crypto_ctx;
@@ -116,15 +132,16 @@ int xdp_crypto(struct xdp_md *ctx)
 	struct iphdr *ip;
 	struct udphdr *udp;
 	struct bpf_dynptr pkt;
-	struct bpf_dynptr data_ptr;
+	struct bpf_dynptr body_ptr;
 	struct bpf_dynptr iv_ptr;
 	void *payload;
 	__u32 payload_len;
 	__u32 payload_off;
-	__u32 data_len;
-	__u32 data_off;
+	__u32 body_len;
+	__u32 body_off;
 	__u32 iv_off;
 	__u32 zero = 0;
+	__u16 frag_off;
 	__u8 saved_iv[EBAF_CRYPTO_IV_BYTES];
 	int rc;
 
@@ -134,90 +151,105 @@ int xdp_crypto(struct xdp_md *ctx)
 
 	if ((void *)(eth + 1) > data_end) {
 		stat_reason(stats, &stats->packets_bad_eth);
-		return XDP_PASS;
+		return TC_ACT_OK;
 	}
 
 	if (eth->h_proto != bpf_htons(ETH_P_IP)) {
 		if (stats)
 			stat_inc(&stats->packets_passed);
-		return XDP_PASS;
+		return TC_ACT_OK;
 	}
 
 	ip = (void *)(eth + 1);
 	if ((void *)(ip + 1) > data_end || ip->ihl < 5) {
 		stat_reason(stats, &stats->packets_bad_ip);
-		return XDP_PASS;
+		return TC_ACT_OK;
 	}
 	if ((void *)ip + ip->ihl * 4 > data_end) {
 		stat_reason(stats, &stats->packets_bad_ip);
-		return XDP_PASS;
+		return TC_ACT_OK;
+	}
+
+	frag_off = bpf_ntohs(ip->frag_off);
+	if ((frag_off & (IP_MF | IP_OFFSET)) != 0) {
+		stat_reason(stats, &stats->packets_bad_ip);
+		return TC_ACT_OK;
 	}
 
 	if (ip->protocol != IPPROTO_UDP) {
 		if (stats)
 			stat_inc(&stats->packets_passed);
-		return XDP_PASS;
+		return TC_ACT_OK;
 	}
 
 	udp = (void *)ip + ip->ihl * 4;
 	if ((void *)(udp + 1) > data_end) {
 		stat_reason(stats, &stats->packets_bad_udp);
-		return XDP_PASS;
+		return TC_ACT_OK;
 	}
 
 	config = bpf_map_lookup_elem(&crypto_config, &zero);
 	if (!config) {
 		if (stats)
 			stat_inc(&stats->packets_crypto_fail);
-		return XDP_PASS;
+		return TC_ACT_OK;
+	}
+
+	if ((config->action != EBAF_ACTION_ENCRYPT &&
+	     config->action != EBAF_ACTION_DECRYPT) ||
+	    config->algo != EBAF_ALGO_CBC_AES) {
+		if (stats)
+			stat_inc(&stats->packets_passed);
+		return TC_ACT_OK;
 	}
 
 	if (bpf_ntohs(udp->dest) != config->udp_port) {
 		if (stats)
 			stat_inc(&stats->packets_passed);
-		return XDP_PASS;
+		return TC_ACT_OK;
 	}
 
 	payload = (void *)(udp + 1);
 	payload_len = bpf_ntohs(udp->len);
 	if (payload_len < sizeof(*udp)) {
 		stat_reason(stats, &stats->packets_bad_udp);
-		return XDP_PASS;
+		return TC_ACT_OK;
 	}
 	payload_len -= sizeof(*udp);
 	if (payload + payload_len > data_end) {
 		stat_reason(stats, &stats->packets_bad_udp);
-		return XDP_PASS;
+		return TC_ACT_OK;
 	}
 
 	hdr = payload;
 	if (payload_len < sizeof(*hdr)) {
 		stat_reason(stats, &stats->packets_bad_length);
-		return XDP_PASS;
+		return TC_ACT_OK;
 	}
 	if ((void *)(hdr + 1) > data_end) {
 		stat_reason(stats, &stats->packets_bad_length);
-		return XDP_PASS;
+		return TC_ACT_OK;
 	}
 
-	if (hdr->magic != bpf_htonl(EBAF_CRYPTO_MAGIC) || hdr->version != EBAF_CRYPTO_VERSION) {
+	if (hdr->magic != bpf_htonl(EBAF_CRYPTO_MAGIC) ||
+	    hdr->version != EBAF_CRYPTO_VERSION ||
+	    hdr->action != EBAF_ACTION_ENCRYPT) {
 		stat_reason(stats, &stats->packets_bad_magic);
-		return XDP_PASS;
+		return TC_ACT_OK;
 	}
 
-	data_len = payload_len - sizeof(*hdr);
-	if (bpf_ntohs(hdr->payload_len) != data_len) {
+	body_len = payload_len - sizeof(*hdr);
+	if (bpf_ntohs(hdr->payload_len) != body_len) {
 		stat_reason(stats, &stats->packets_bad_length);
-		return XDP_PASS;
+		return TC_ACT_OK;
 	}
-	if (data_len == 0) {
+	if (body_len == 0) {
 		stat_reason(stats, &stats->packets_bad_length);
-		return XDP_PASS;
+		return TC_ACT_OK;
 	}
-	if (config->algo == EBAF_ALGO_CBC_AES &&
-	    (data_len & (EBAF_CRYPTO_BLOCK_BYTES - 1)) != 0) {
+	if ((body_len & (EBAF_CRYPTO_BLOCK_BYTES - 1)) != 0) {
 		stat_reason(stats, &stats->packets_bad_alignment);
-		return XDP_PASS;
+		return TC_ACT_OK;
 	}
 
 	__builtin_memcpy(saved_iv, hdr->iv, sizeof(saved_iv));
@@ -225,71 +257,68 @@ int xdp_crypto(struct xdp_md *ctx)
 	slot = bpf_map_lookup_elem(&crypto_ctx_map, &zero);
 	if (!slot) {
 		stat_reason(stats, &stats->packets_no_crypto_ctx);
-		return XDP_PASS;
+		return TC_ACT_OK;
 	}
 
 	crypto_ctx = slot->ctx;
 	if (!crypto_ctx) {
 		stat_reason(stats, &stats->packets_no_crypto_ctx);
-		return XDP_PASS;
+		return TC_ACT_OK;
 	}
 
-	rc = bpf_dynptr_from_xdp(ctx, 0, &pkt);
+	rc = bpf_dynptr_from_skb(skb, 0, &pkt);
 	if (rc != 0) {
 		if (stats)
 			stat_inc(&stats->packets_crypto_fail);
-		return XDP_PASS;
+		return TC_ACT_OK;
 	}
 
 	payload_off = payload - data;
-	data_off = payload_off + sizeof(*hdr);
+	body_off = payload_off + sizeof(*hdr);
 	iv_off = payload_off + EBAF_CRYPTO_IV_OFFSET;
 
-	rc = bpf_dynptr_clone(&pkt, &data_ptr);
+	rc = bpf_dynptr_clone(&pkt, &body_ptr);
 	if (rc != 0) {
 		if (stats)
 			stat_inc(&stats->packets_crypto_fail);
-		return XDP_PASS;
+		return TC_ACT_OK;
 	}
 
-	rc = bpf_dynptr_adjust(&data_ptr, data_off, data_off + data_len);
+	rc = bpf_dynptr_adjust(&body_ptr, body_off, body_off + body_len);
 	if (rc != 0) {
 		if (stats)
 			stat_inc(&stats->packets_crypto_fail);
-		return XDP_PASS;
+		return TC_ACT_OK;
 	}
 
 	rc = bpf_dynptr_clone(&pkt, &iv_ptr);
 	if (rc != 0) {
 		if (stats)
 			stat_inc(&stats->packets_crypto_fail);
-		return XDP_PASS;
+		return TC_ACT_OK;
 	}
 
 	rc = bpf_dynptr_adjust(&iv_ptr, iv_off, iv_off + EBAF_CRYPTO_IV_BYTES);
 	if (rc != 0) {
 		if (stats)
 			stat_inc(&stats->packets_crypto_fail);
-		return XDP_PASS;
+		return TC_ACT_OK;
 	}
 
 	if (config->action == EBAF_ACTION_ENCRYPT)
-		rc = bpf_crypto_encrypt(crypto_ctx, &data_ptr, &data_ptr, &iv_ptr);
-	else if (config->action == EBAF_ACTION_DECRYPT)
-		rc = bpf_crypto_decrypt(crypto_ctx, &data_ptr, &data_ptr, &iv_ptr);
+		rc = bpf_crypto_encrypt(crypto_ctx, &body_ptr, &body_ptr, &iv_ptr);
 	else
-		rc = -1;
-
+		rc = bpf_crypto_decrypt(crypto_ctx, &body_ptr, &body_ptr, &iv_ptr);
 	if (rc == 0) {
 		udp->check = 0;
 		__builtin_memcpy(hdr->iv, saved_iv, sizeof(saved_iv));
 		if (stats)
 			stat_inc(&stats->packets_crypto_ok);
-		emit_crypto_event(ip, udp, hdr, payload_len, data_len, data_end, config);
+		emit_crypto_event(ip, udp, hdr, payload_len, body_len, data_end, config);
 	} else {
 		if (stats)
 			stat_inc(&stats->packets_crypto_fail);
 	}
 
-	return XDP_PASS;
+	return TC_ACT_OK;
 }

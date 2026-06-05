@@ -98,6 +98,48 @@ static void test_parse_jsonl_option(void)
 	expect_int("jsonl enables events", cfg.print_events, 1);
 }
 
+static void test_parse_hook_option(void)
+{
+	char *argv[] = {
+		"ebaf-crypto", "--iface", "veth0", "--mode", "encrypt",
+		"--key", "000102030405060708090a0b0c0d0e0f",
+		"--hook", "both",
+	};
+	struct ebaf_user_config cfg;
+	int rc = ebaf_parse_args(9, argv, &cfg);
+
+	expect_int("parse hook rc", rc, 0);
+	expect_int("hook both", cfg.hook, EBAF_HOOK_BOTH);
+}
+
+static void test_parse_tc_attach_option(void)
+{
+	char *argv[] = {
+		"ebaf-crypto", "--iface", "veth0", "--mode", "decrypt",
+		"--key", "000102030405060708090a0b0c0d0e0f",
+		"--hook", "tc", "--tc-egress",
+	};
+	struct ebaf_user_config cfg;
+	int rc = ebaf_parse_args(10, argv, &cfg);
+
+	expect_int("parse tc attach rc", rc, 0);
+	expect_int("tc egress", cfg.tc_attach, EBAF_TC_ATTACH_EGRESS);
+}
+
+static void test_parse_transparent_option(void)
+{
+	char *argv[] = {
+		"ebaf-crypto", "--iface", "veth0", "--mode", "encrypt",
+		"--key", "000102030405060708090a0b0c0d0e0f",
+		"--transparent",
+	};
+	struct ebaf_user_config cfg;
+	int rc = ebaf_parse_args(8, argv, &cfg);
+
+	expect_int("parse transparent rc", rc, 0);
+	expect_int("transparent flag", cfg.crypto.flags, EBAF_CRYPTO_F_TRANSPARENT);
+}
+
 static void test_parse_chacha20_args(void)
 {
 	char *argv[] = {
@@ -214,6 +256,9 @@ int main(void)
 	test_parse_runtime_options();
 	test_parse_events_option();
 	test_parse_jsonl_option();
+	test_parse_hook_option();
+	test_parse_tc_attach_option();
+	test_parse_transparent_option();
 	test_parse_chacha20_args();
 	test_reject_short_key();
 	test_reject_bad_mode();

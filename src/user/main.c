@@ -19,7 +19,7 @@ static void handle_signal(int sig)
 static void usage(const char *prog)
 {
 	fprintf(stderr,
-		"usage: %s --iface IFACE --mode encrypt|decrypt --key HEXKEY [--algo cbc-aes|chacha20] [--port PORT] [--stats-interval SEC] [--duration SEC] [--events] [--jsonl]\n",
+		"usage: %s --iface IFACE --mode encrypt|decrypt --key HEXKEY [--algo cbc-aes|chacha20] [--port PORT] [--stats-interval SEC] [--duration SEC] [--hook xdp|tc|both] [--tc-ingress|--tc-egress] [--transparent] [--events] [--jsonl]\n",
 		prog);
 }
 
@@ -28,6 +28,8 @@ int main(int argc, char **argv)
 	struct ebaf_user_config cfg;
 	struct ebaf_bpf_runtime rt;
 	time_t start_time;
+	time_t last_stats_time;
+	time_t now;
 	int err;
 
 	setvbuf(stdout, NULL, _IOLBF, 0);
@@ -54,13 +56,20 @@ int main(int argc, char **argv)
 	}
 
 	start_time = time(NULL);
+	last_stats_time = 0;
 	while (!exiting) {
-		ebaf_bpf_print_stats(&rt);
+		now = time(NULL);
+		if (last_stats_time == 0 ||
+		    now - last_stats_time >= (time_t)cfg.stats_interval_sec) {
+			ebaf_bpf_print_stats(&rt);
+			last_stats_time = now;
+		}
 		if (cfg.print_events)
 			ebaf_bpf_poll_events(&rt, 100);
 		if (cfg.duration_sec > 0 && time(NULL) - start_time >= (time_t)cfg.duration_sec)
 			break;
-		sleep(cfg.stats_interval_sec);
+		if (!cfg.print_events)
+			sleep(1);
 	}
 
 	ebaf_bpf_stop(&cfg, &rt);

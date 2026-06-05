@@ -3,6 +3,8 @@
 
 #include "config.h"
 
+#include <bpf/libbpf.h>
+
 struct ring_buffer;
 
 struct ebaf_bpf_runtime {
@@ -12,6 +14,9 @@ struct ebaf_bpf_runtime {
 	int stats_map_fd;
 	int config_map_fd;
 	struct ring_buffer *event_ring;
+	struct bpf_tc_hook tc_hook;
+	struct bpf_tc_opts tc_opts;
+	int tc_attached;
 };
 
 int ebaf_bpf_start(const struct ebaf_user_config *cfg, struct ebaf_bpf_runtime *rt);

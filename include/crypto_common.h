@@ -29,6 +29,8 @@
 #define EBAF_ALGO_CBC_AES 1
 #define EBAF_ALGO_CHACHA20 2
 #define EBAF_EVENT_SAMPLE_BYTES 32
+#define EBAF_CRYPTO_F_TRANSPARENT 1u
+#define EBAF_MAX_TRANSPARENT_PAYLOAD 1408
 
 struct ebaf_crypto_header {
 	__be32 magic;
@@ -43,6 +45,7 @@ struct ebaf_crypto_config {
 	__u32 key_len;
 	__u32 action;
 	__u32 algo;
+	__u32 flags;
 	__u16 udp_port;
 };
 

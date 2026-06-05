@@ -71,6 +71,8 @@ int ebaf_parse_args(int argc, char **argv, struct ebaf_user_config *cfg)
 		return -1;
 
 	memset(cfg, 0, sizeof(*cfg));
+	cfg->hook = EBAF_HOOK_XDP;
+	cfg->tc_attach = EBAF_TC_ATTACH_AUTO;
 
 	for (int i = 1; i < argc; i++) {
 		if (strcmp(argv[i], "--iface") == 0 && i + 1 < argc) {
@@ -90,11 +92,28 @@ int ebaf_parse_args(int argc, char **argv, struct ebaf_user_config *cfg)
 		} else if (strcmp(argv[i], "--duration") == 0 && i + 1 < argc) {
 			if (parse_uint(argv[++i], 1, UINT_MAX, &duration_sec) != 0)
 				return -1;
+		} else if (strcmp(argv[i], "--hook") == 0 && i + 1 < argc) {
+			const char *hook = argv[++i];
+
+			if (strcmp(hook, "xdp") == 0)
+				cfg->hook = EBAF_HOOK_XDP;
+			else if (strcmp(hook, "tc") == 0)
+				cfg->hook = EBAF_HOOK_TC;
+			else if (strcmp(hook, "both") == 0)
+				cfg->hook = EBAF_HOOK_BOTH;
+			else
+				return -1;
 		} else if (strcmp(argv[i], "--events") == 0) {
 			cfg->print_events = 1;
 		} else if (strcmp(argv[i], "--jsonl") == 0) {
 			cfg->output_jsonl = 1;
 			cfg->print_events = 1;
+		} else if (strcmp(argv[i], "--transparent") == 0) {
+			cfg->crypto.flags |= EBAF_CRYPTO_F_TRANSPARENT;
+		} else if (strcmp(argv[i], "--tc-ingress") == 0) {
+			cfg->tc_attach = EBAF_TC_ATTACH_INGRESS;
+		} else if (strcmp(argv[i], "--tc-egress") == 0) {
+			cfg->tc_attach = EBAF_TC_ATTACH_EGRESS;
 		} else {
 			return -1;
 		}

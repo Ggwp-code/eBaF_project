@@ -1,5 +1,5 @@
 {
-  "created_at": 1779903064.0789247,
+  "created_at": 1779990349.21023,
   "results": [
     {
       "cmd": [
@@ -7,11 +7,20 @@
         "check"
       ],
       "returncode": 0,
-      "duration_sec": 0.171,
-      "stdout": "make[1]: Entering directory '/home/hatsune_miku/eBaF_project'\n./scripts/check_kernel_features.sh\nPASS: BTF available\nPASS: clang available\nPASS: bpftool available\nPASS: ip command available\nPASS: bpf_crypto_encrypt kfunc visible in BTF\nPASS: bpf_dynptr_from_xdp kfunc visible in BTF\nmake[1]: Leaving directory '/home/hatsune_miku/eBaF_project'\n",
+      "duration_sec": 0.833,
+      "stdout": "make[1]: Entering directory '/home/hatsune_miku/eBaF_project'\n./scripts/check_kernel_features.sh\nPASS: BTF available\nPASS: clang available\nPASS: bpftool available\nPASS: ip command available\nPASS: bpf_crypto_ctx_create kfunc visible in BTF\nPASS: bpf_crypto_ctx_release kfunc visible in BTF\nPASS: bpf_crypto_encrypt kfunc visible in BTF\nPASS: bpf_crypto_decrypt kfunc visible in BTF\nPASS: bpf_dynptr_from_xdp kfunc visible in BTF\nPASS: bpf_dynptr_from_skb kfunc visible in BTF\nPASS: bpf_dynptr_adjust kfunc visible in BTF\nPASS: bpf_dynptr_clone kfunc visible in BTF\nmake[1]: Leaving directory '/home/hatsune_miku/eBaF_project'\n",
       "stderr": "",
       "name": "check",
-      "iteration": 0
+      "hook": "none",
+      "mode": "feature-gate",
+      "payload_bytes": "",
+      "iteration": 0,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
     },
     {
       "cmd": [
@@ -20,11 +29,42 @@
         "correctness-test"
       ],
       "returncode": 0,
-      "duration_sec": 4.245,
+      "duration_sec": 4.213,
       "stdout": "integration crypto correctness passed\n",
       "stderr": "",
       "name": "correctness",
-      "iteration": 0
+      "hook": "xdp",
+      "mode": "encrypt-decrypt",
+      "payload_bytes": "",
+      "iteration": 0,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "tc-chat-test"
+      ],
+      "returncode": 0,
+      "duration_sec": 5.102,
+      "stdout": "{\"type\":\"packet\",\"ts_ns\":3479813413001,\"action\":\"encrypt\",\"algo\":\"cbc-aes\",\"src\":\"10.77.0.1\",\"src_port\":51227,\"dst\":\"10.77.0.2\",\"dst_port\":7777,\"payload_len\":40,\"data_len\":16,\"sample\":\"e6b3ac3d48cc9c7b90c652cae72c97c6\"}\n{\"type\":\"packet\",\"ts_ns\":3479813422013,\"action\":\"decrypt\",\"algo\":\"cbc-aes\",\"src\":\"10.77.0.1\",\"src_port\":51227,\"dst\":\"10.77.0.2\",\"dst_port\":7777,\"payload_len\":40,\"data_len\":16,\"sample\":\"68656c6c6f207265616c206170700202\"}\ntc udp chat crypto passed\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_decrypt",
+      "hook": "tc",
+      "mode": "encrypt-decrypt",
+      "payload_bytes": 16,
+      "iteration": 0,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
     },
     {
       "cmd": [
@@ -33,11 +73,196 @@
         "benchmark-smoke"
       ],
       "returncode": 0,
-      "duration_sec": 7.079,
-      "stdout": "seen=1809804 passed=6 crypto_ok=1809798 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2352086 duration=5s pps=470417\n",
+      "duration_sec": 7.092,
+      "stdout": "seen=1668493 passed=6 crypto_ok=1668487 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2191815 duration=5s pps=438363\n",
       "stderr": "",
-      "name": "benchmark",
-      "iteration": 0
+      "name": "local_veth_xdp_encrypt_64",
+      "hook": "xdp",
+      "mode": "encrypt",
+      "payload_bytes": 64,
+      "iteration": 0,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "benchmark-smoke"
+      ],
+      "returncode": 0,
+      "duration_sec": 7.073,
+      "stdout": "seen=1660570 passed=5 crypto_ok=1660565 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2178831 duration=5s pps=435766\n",
+      "stderr": "",
+      "name": "local_veth_xdp_encrypt_64",
+      "hook": "xdp",
+      "mode": "encrypt",
+      "payload_bytes": 64,
+      "iteration": 1,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "benchmark-smoke"
+      ],
+      "returncode": 0,
+      "duration_sec": 7.085,
+      "stdout": "seen=1663804 passed=5 crypto_ok=1663799 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2202236 duration=5s pps=440447\n",
+      "stderr": "",
+      "name": "local_veth_xdp_encrypt_64",
+      "hook": "xdp",
+      "mode": "encrypt",
+      "payload_bytes": 64,
+      "iteration": 2,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "benchmark-smoke"
+      ],
+      "returncode": 0,
+      "duration_sec": 7.076,
+      "stdout": "seen=1681433 passed=6 crypto_ok=1681427 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2249569 duration=5s pps=449913\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_64",
+      "hook": "tc",
+      "mode": "encrypt",
+      "payload_bytes": 64,
+      "iteration": 0,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "benchmark-smoke"
+      ],
+      "returncode": 0,
+      "duration_sec": 7.099,
+      "stdout": "seen=1752716 passed=6 crypto_ok=1752709 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2248976 duration=5s pps=449795\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_64",
+      "hook": "tc",
+      "mode": "encrypt",
+      "payload_bytes": 64,
+      "iteration": 1,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "benchmark-smoke"
+      ],
+      "returncode": 0,
+      "duration_sec": 7.083,
+      "stdout": "seen=1749150 passed=6 crypto_ok=1749144 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2282887 duration=5s pps=456577\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_64",
+      "hook": "tc",
+      "mode": "encrypt",
+      "payload_bytes": 64,
+      "iteration": 2,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "tc-chat-benchmark"
+      ],
+      "returncode": 0,
+      "duration_sec": 9.288,
+      "stdout": "2098339\ntc udp benchmark received=2078630 duration=5s pps=415726 crypto_ok=4196678 malformed=0\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_decrypt_64",
+      "hook": "tc",
+      "mode": "encrypt-decrypt",
+      "payload_bytes": 64,
+      "iteration": 0,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "tc-chat-benchmark"
+      ],
+      "returncode": 0,
+      "duration_sec": 9.3,
+      "stdout": "2153984\ntc udp benchmark received=2139673 duration=5s pps=427934 crypto_ok=4307968 malformed=0\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_decrypt_64",
+      "hook": "tc",
+      "mode": "encrypt-decrypt",
+      "payload_bytes": 64,
+      "iteration": 1,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "tc-chat-benchmark"
+      ],
+      "returncode": 0,
+      "duration_sec": 9.282,
+      "stdout": "2160121\ntc udp benchmark received=2152132 duration=5s pps=430426 crypto_ok=4320242 malformed=0\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_decrypt_64",
+      "hook": "tc",
+      "mode": "encrypt-decrypt",
+      "payload_bytes": 64,
+      "iteration": 2,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
     },
     {
       "cmd": [
@@ -47,10 +272,19 @@
       ],
       "returncode": 0,
       "duration_sec": 7.097,
-      "stdout": "seen=1838433 passed=6 crypto_ok=1838427 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2392584 duration=5s pps=478516\n",
+      "stdout": "seen=1665853 passed=6 crypto_ok=1665847 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2183924 duration=5s pps=436784\n",
       "stderr": "",
-      "name": "benchmark",
-      "iteration": 1
+      "name": "local_veth_xdp_encrypt_512",
+      "hook": "xdp",
+      "mode": "encrypt",
+      "payload_bytes": 512,
+      "iteration": 0,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
     },
     {
       "cmd": [
@@ -59,11 +293,570 @@
         "benchmark-smoke"
       ],
       "returncode": 0,
-      "duration_sec": 7.091,
-      "stdout": "seen=2300455 passed=6 crypto_ok=2300449 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2860132 duration=5s pps=572026\n",
+      "duration_sec": 7.092,
+      "stdout": "seen=1640778 passed=5 crypto_ok=1640773 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2162471 duration=5s pps=432494\n",
       "stderr": "",
-      "name": "benchmark",
-      "iteration": 2
+      "name": "local_veth_xdp_encrypt_512",
+      "hook": "xdp",
+      "mode": "encrypt",
+      "payload_bytes": 512,
+      "iteration": 1,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "benchmark-smoke"
+      ],
+      "returncode": 0,
+      "duration_sec": 7.087,
+      "stdout": "seen=2369474 passed=6 crypto_ok=2369468 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2893894 duration=5s pps=578778\n",
+      "stderr": "",
+      "name": "local_veth_xdp_encrypt_512",
+      "hook": "xdp",
+      "mode": "encrypt",
+      "payload_bytes": 512,
+      "iteration": 2,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "benchmark-smoke"
+      ],
+      "returncode": 0,
+      "duration_sec": 7.09,
+      "stdout": "seen=1671430 passed=6 crypto_ok=1671424 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2180990 duration=5s pps=436198\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_512",
+      "hook": "tc",
+      "mode": "encrypt",
+      "payload_bytes": 512,
+      "iteration": 0,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "benchmark-smoke"
+      ],
+      "returncode": 0,
+      "duration_sec": 7.076,
+      "stdout": "seen=1730314 passed=5 crypto_ok=1730309 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2267168 duration=5s pps=453433\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_512",
+      "hook": "tc",
+      "mode": "encrypt",
+      "payload_bytes": 512,
+      "iteration": 1,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "benchmark-smoke"
+      ],
+      "returncode": 0,
+      "duration_sec": 7.077,
+      "stdout": "seen=1759914 passed=5 crypto_ok=1759909 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2284802 duration=5s pps=456960\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_512",
+      "hook": "tc",
+      "mode": "encrypt",
+      "payload_bytes": 512,
+      "iteration": 2,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "tc-chat-benchmark"
+      ],
+      "returncode": 0,
+      "duration_sec": 9.279,
+      "stdout": "2254340\ntc udp benchmark received=2249555 duration=5s pps=449911 crypto_ok=4508680 malformed=0\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_decrypt_512",
+      "hook": "tc",
+      "mode": "encrypt-decrypt",
+      "payload_bytes": 512,
+      "iteration": 0,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "tc-chat-benchmark"
+      ],
+      "returncode": 0,
+      "duration_sec": 9.261,
+      "stdout": "2263644\ntc udp benchmark received=2244455 duration=5s pps=448891 crypto_ok=4527288 malformed=0\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_decrypt_512",
+      "hook": "tc",
+      "mode": "encrypt-decrypt",
+      "payload_bytes": 512,
+      "iteration": 1,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "tc-chat-benchmark"
+      ],
+      "returncode": 0,
+      "duration_sec": 9.297,
+      "stdout": "2281080\ntc udp benchmark received=2254668 duration=5s pps=450933 crypto_ok=4562160 malformed=0\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_decrypt_512",
+      "hook": "tc",
+      "mode": "encrypt-decrypt",
+      "payload_bytes": 512,
+      "iteration": 2,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "benchmark-smoke"
+      ],
+      "returncode": 0,
+      "duration_sec": 7.079,
+      "stdout": "seen=2386749 passed=6 crypto_ok=2386743 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2883481 duration=5s pps=576696\n",
+      "stderr": "",
+      "name": "local_veth_xdp_encrypt_1200",
+      "hook": "xdp",
+      "mode": "encrypt",
+      "payload_bytes": 1200,
+      "iteration": 0,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "benchmark-smoke"
+      ],
+      "returncode": 0,
+      "duration_sec": 7.094,
+      "stdout": "seen=1735298 passed=6 crypto_ok=1735292 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2282130 duration=5s pps=456426\n",
+      "stderr": "",
+      "name": "local_veth_xdp_encrypt_1200",
+      "hook": "xdp",
+      "mode": "encrypt",
+      "payload_bytes": 1200,
+      "iteration": 1,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "benchmark-smoke"
+      ],
+      "returncode": 0,
+      "duration_sec": 7.108,
+      "stdout": "seen=2843227 passed=5 crypto_ok=2843221 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=3405503 duration=5s pps=681100\n",
+      "stderr": "",
+      "name": "local_veth_xdp_encrypt_1200",
+      "hook": "xdp",
+      "mode": "encrypt",
+      "payload_bytes": 1200,
+      "iteration": 2,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "benchmark-smoke"
+      ],
+      "returncode": 0,
+      "duration_sec": 7.092,
+      "stdout": "seen=1708216 passed=5 crypto_ok=1708211 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2135508 duration=5s pps=427101\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_1200",
+      "hook": "tc",
+      "mode": "encrypt",
+      "payload_bytes": 1200,
+      "iteration": 0,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "benchmark-smoke"
+      ],
+      "returncode": 0,
+      "duration_sec": 7.073,
+      "stdout": "seen=1856262 passed=6 crypto_ok=1856256 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2367980 duration=5s pps=473596\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_1200",
+      "hook": "tc",
+      "mode": "encrypt",
+      "payload_bytes": 1200,
+      "iteration": 1,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "benchmark-smoke"
+      ],
+      "returncode": 0,
+      "duration_sec": 7.083,
+      "stdout": "seen=1718069 passed=6 crypto_ok=1718063 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2225179 duration=5s pps=445035\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_1200",
+      "hook": "tc",
+      "mode": "encrypt",
+      "payload_bytes": 1200,
+      "iteration": 2,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "tc-chat-benchmark"
+      ],
+      "returncode": 0,
+      "duration_sec": 9.284,
+      "stdout": "2198030\ntc udp benchmark received=2191631 duration=5s pps=438326 crypto_ok=4396060 malformed=0\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_decrypt_1200",
+      "hook": "tc",
+      "mode": "encrypt-decrypt",
+      "payload_bytes": 1200,
+      "iteration": 0,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "tc-chat-benchmark"
+      ],
+      "returncode": 0,
+      "duration_sec": 9.279,
+      "stdout": "2229809\ntc udp benchmark received=2213701 duration=5s pps=442740 crypto_ok=4459618 malformed=0\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_decrypt_1200",
+      "hook": "tc",
+      "mode": "encrypt-decrypt",
+      "payload_bytes": 1200,
+      "iteration": 1,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "tc-chat-benchmark"
+      ],
+      "returncode": 0,
+      "duration_sec": 9.28,
+      "stdout": "2257809\ntc udp benchmark received=2239846 duration=5s pps=447969 crypto_ok=4515618 malformed=0\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_decrypt_1200",
+      "hook": "tc",
+      "mode": "encrypt-decrypt",
+      "payload_bytes": 1200,
+      "iteration": 2,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "benchmark-smoke"
+      ],
+      "returncode": 0,
+      "duration_sec": 7.089,
+      "stdout": "seen=1727972 passed=5 crypto_ok=1727967 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2267935 duration=5s pps=453587\n",
+      "stderr": "",
+      "name": "local_veth_xdp_encrypt_1408",
+      "hook": "xdp",
+      "mode": "encrypt",
+      "payload_bytes": 1408,
+      "iteration": 0,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "benchmark-smoke"
+      ],
+      "returncode": 0,
+      "duration_sec": 7.071,
+      "stdout": "seen=1722611 passed=6 crypto_ok=1722605 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2263044 duration=5s pps=452608\n",
+      "stderr": "",
+      "name": "local_veth_xdp_encrypt_1408",
+      "hook": "xdp",
+      "mode": "encrypt",
+      "payload_bytes": 1408,
+      "iteration": 1,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "benchmark-smoke"
+      ],
+      "returncode": 0,
+      "duration_sec": 7.084,
+      "stdout": "seen=1680256 passed=5 crypto_ok=1680251 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2215411 duration=5s pps=443082\n",
+      "stderr": "",
+      "name": "local_veth_xdp_encrypt_1408",
+      "hook": "xdp",
+      "mode": "encrypt",
+      "payload_bytes": 1408,
+      "iteration": 2,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "benchmark-smoke"
+      ],
+      "returncode": 0,
+      "duration_sec": 7.077,
+      "stdout": "seen=1736455 passed=6 crypto_ok=1736449 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2278652 duration=5s pps=455730\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_1408",
+      "hook": "tc",
+      "mode": "encrypt",
+      "payload_bytes": 1408,
+      "iteration": 0,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "benchmark-smoke"
+      ],
+      "returncode": 0,
+      "duration_sec": 7.075,
+      "stdout": "seen=1804333 passed=5 crypto_ok=1804328 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2347210 duration=5s pps=469442\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_1408",
+      "hook": "tc",
+      "mode": "encrypt",
+      "payload_bytes": 1408,
+      "iteration": 1,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "benchmark-smoke"
+      ],
+      "returncode": 0,
+      "duration_sec": 7.081,
+      "stdout": "seen=1681544 passed=6 crypto_ok=1681538 crypto_fail=0 malformed=0 bad_eth=0 bad_ip=0 bad_udp=0 bad_magic=0 bad_length=0 bad_alignment=0 no_crypto_ctx=0\nbenchmark smoke sent=2226868 duration=5s pps=445373\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_1408",
+      "hook": "tc",
+      "mode": "encrypt",
+      "payload_bytes": 1408,
+      "iteration": 2,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "tc-chat-benchmark"
+      ],
+      "returncode": 0,
+      "duration_sec": 9.264,
+      "stdout": "2264160\ntc udp benchmark received=2247451 duration=5s pps=449490 crypto_ok=4528320 malformed=0\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_decrypt_1408",
+      "hook": "tc",
+      "mode": "encrypt-decrypt",
+      "payload_bytes": 1408,
+      "iteration": 0,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "tc-chat-benchmark"
+      ],
+      "returncode": 0,
+      "duration_sec": 9.295,
+      "stdout": "2238515\ntc udp benchmark received=2216228 duration=5s pps=443245 crypto_ok=4477030 malformed=0\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_decrypt_1408",
+      "hook": "tc",
+      "mode": "encrypt-decrypt",
+      "payload_bytes": 1408,
+      "iteration": 1,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
+    },
+    {
+      "cmd": [
+        "sudo",
+        "make",
+        "tc-chat-benchmark"
+      ],
+      "returncode": 0,
+      "duration_sec": 9.289,
+      "stdout": "2372408\ntc udp benchmark received=2354607 duration=5s pps=470921 crypto_ok=4744816 malformed=0\n",
+      "stderr": "",
+      "name": "local_veth_tc_encrypt_decrypt_1408",
+      "hook": "tc",
+      "mode": "encrypt-decrypt",
+      "payload_bytes": 1408,
+      "iteration": 2,
+      "metadata": {
+        "kernel": "6.18.7-arch1-1",
+        "machine": "x86_64",
+        "python": "3.14.2",
+        "cpu_count": 16
+      }
     }
   ]
 }
