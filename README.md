@@ -71,22 +71,22 @@ sudo python3 scripts/demo_live_cipher.py --port 8000 --media-file /path/to/video
 XDP or TC framed packet mode:
 
 ```bash
-sudo ./build/ebaf-crypto --iface eth0 --mode encrypt --hook xdp --key 000102030405060708090a0b0c0d0e0f --port 7777 --events --jsonl
+sudo ./build/ebaf-crypto --iface eth0 --mode encrypt --hook xdp --key <32-hex-char-aes128-key> --port 7777 --events --jsonl
 ```
 
 TC transparent mode:
 
 ```bash
-sudo ./build/ebaf-crypto --iface eth0 --mode encrypt --hook tc --transparent --key 000102030405060708090a0b0c0d0e0f --port 7777 --events --jsonl
+sudo ./build/ebaf-crypto --iface eth0 --mode encrypt --hook tc --transparent --key <32-hex-char-aes128-key> --port 7777 --events --jsonl
 ```
 
 Decrypt transparent traffic on the peer:
 
 ```bash
-sudo ./build/ebaf-crypto --iface eth0 --mode decrypt --hook tc --transparent --key 000102030405060708090a0b0c0d0e0f --port 7777 --events --jsonl
+sudo ./build/ebaf-crypto --iface eth0 --mode decrypt --hook tc --transparent --key <32-hex-char-aes128-key> --port 7777 --events --jsonl
 ```
 
-The fixed key above is only for lab scripts. Generate a real secret for any real traffic.
+Generate a fresh AES key before running traffic outside the integration scripts.
 
 ## Useful Commands
 
@@ -139,7 +139,7 @@ sudo make demo-smoke
 
 UDP payload begins with:
 
-- magic: `EBAF`
+- marker: `EBAF`
 - version: `1`
 - action: `1` encrypt or `2` decrypt
 - payload length: big-endian 16-bit value
